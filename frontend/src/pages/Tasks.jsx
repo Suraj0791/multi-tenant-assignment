@@ -147,6 +147,9 @@ export default function Tasks() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [sortBy, setSortBy] = useState('dueDate');
+  const [sortOrder, setSortOrder] = useState('asc');
   const { user } = useSelector((state) => state.auth);
 
   const fetchTasks = async () => {
@@ -226,7 +229,44 @@ export default function Tasks() {
             A list of all tasks in your organization
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none space-x-4 flex items-center">
+          <div className="flex items-center space-x-2">
+            <label htmlFor="filterStatus" className="text-sm text-gray-700">
+              Status:
+            </label>
+            <select
+              id="filterStatus"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="rounded-md border-gray-300 text-sm"
+            >
+              <option value="all">All</option>
+              <option value="todo">Todo</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div className="flex items-center space-x-2">
+            <label htmlFor="sortBy" className="text-sm text-gray-700">
+              Sort by:
+            </label>
+            <select
+              id="sortBy"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="rounded-md border-gray-300 text-sm"
+            >
+              <option value="dueDate">Due Date</option>
+              <option value="title">Title</option>
+              <option value="status">Status</option>
+            </select>
+            <button
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              className="p-1 rounded hover:bg-gray-100"
+            >
+              {sortOrder === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
           <button
             type="button"
             className="btn-primary"
@@ -286,7 +326,24 @@ export default function Tasks() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {tasks.map((task) => (
+                  {tasks
+                    .filter(task => filterStatus === 'all' ? true : task.status === filterStatus)
+                    .sort((a, b) => {
+                      if (sortBy === 'dueDate') {
+                        return sortOrder === 'asc'
+                          ? new Date(a.dueDate) - new Date(b.dueDate)
+                          : new Date(b.dueDate) - new Date(a.dueDate);
+                      }
+                      if (sortBy === 'title') {
+                        return sortOrder === 'asc'
+                          ? a.title.localeCompare(b.title)
+                          : b.title.localeCompare(a.title);
+                      }
+                      return sortOrder === 'asc'
+                        ? a.status.localeCompare(b.status)
+                        : b.status.localeCompare(a.status);
+                    })
+                    .map((task) => (
                     <tr key={task._id}>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
                         {task.title}
