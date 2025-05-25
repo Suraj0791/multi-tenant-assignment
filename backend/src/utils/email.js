@@ -1,19 +1,11 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: process.env.SMTP_PORT === '465',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const sendInvitationEmail = async (email, organizationName, inviteLink) => {
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_USER,
+    await resend.emails.send({
+      from: 'Multi-Tenant Task Manager <onboarding@resend.dev>',
       to: email,
       subject: `Invitation to join ${organizationName}`,
       html: `
@@ -33,8 +25,8 @@ export const sendInvitationEmail = async (email, organizationName, inviteLink) =
 
 export const sendTaskNotification = async (email, taskTitle, dueDate) => {
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_USER,
+    await resend.emails.send({
+      from: 'Multi-Tenant Task Manager <notifications@resend.dev>',
       to: email,
       subject: `Task Reminder: ${taskTitle}`,
       html: `

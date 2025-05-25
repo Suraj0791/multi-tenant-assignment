@@ -1,6 +1,8 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import cron from 'node-cron';
 import { checkTaskExpiry } from './utils/taskExpiry.js';
@@ -9,9 +11,6 @@ import { checkTaskExpiry } from './utils/taskExpiry.js';
 import authRoutes from './routes/auth.js';
 import taskRoutes from './routes/tasks.js';
 import organizationRoutes from './routes/organizations.js';
-
-// Load environment variables
-dotenv.config();
 
 const app = express();
 
