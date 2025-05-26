@@ -1,8 +1,9 @@
 [build]
-  base = "frontend"            # Your frontend folder (where package.json lives)
-  publish = "dist"             # The folder inside frontend where your build outputs (dist/)
-  command = "npm run build"    # Your build command
+  base = "frontend"
+  publish = "dist"
+  command = "npm run build"
 
-[dev]
-  # Optional: Netlify Dev settings if you want to run locally with Netlify CLI
-  framework = "vite"           # or react, next, etc. depending on your frontend
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
