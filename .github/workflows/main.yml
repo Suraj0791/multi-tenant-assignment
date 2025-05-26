@@ -31,6 +31,14 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      - name: List files in root
+        run: ls -l
+
+      - name: List files in dist
+        run: ls -l frontend/dist
+
+
       
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v2.0
