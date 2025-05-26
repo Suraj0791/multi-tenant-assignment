@@ -26,8 +26,7 @@ const userSchema = new mongoose.Schema({
   },
   organization: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Organization',
-    required: true
+    ref: 'Organization'
   },
   role: {
     type: String,
@@ -50,6 +49,11 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+// Indexes for better query performance
+userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ organization: 1 });
+userSchema.index({ role: 1 });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

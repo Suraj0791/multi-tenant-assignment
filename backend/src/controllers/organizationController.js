@@ -1,5 +1,6 @@
 import Organization from '../models/Organization.js';
 import User from '../models/User.js';
+import Invitation from '../models/Invitation.js';
 import { sendInvitationEmail } from '../utils/email.js';
 import crypto from 'crypto';
 import { config } from '../config/index.js';
@@ -66,6 +67,21 @@ export const getMembers = async (req, res) => {
 };
 
 // Invite new member
+// Helper to check if user can be invited
+const canInviteUser = async (email, organizationId) => {
+  // Check if user already exists
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    // If user exists, check if they're already in the organization
+    if (existingUser.organization?.toString() === organizationId.toString()) {
+      throw new Error('User is already a member of this organization');
+    }
+    // If user exists but in different org, they can be invited
+    return true;
+  }
+  return true;
+};
+
 export const inviteMember = async (req, res) => {
   console.log('--- INVITE MEMBER CONTROLLER CALLED --- Body:', req.body, 'User:', req.user ? req.user.email : 'No user', 'OrgID:', req.organizationId);
   try {
@@ -81,23 +97,37 @@ export const inviteMember = async (req, res) => {
       return res.status(400).json({ error: 'Invalid role' });
     }
 
-    // Check if user already exists
-    console.log('--- INVITE MEMBER: Checking if user exists with email:', email, '---');
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      console.error('--- INVITE MEMBER: User already exists with email:', email, 'User ID:', existingUser._id, '---');
-      return res.status(400).json({ error: 'User already exists' });
+    // Check if user can be invited
+    await canInviteUser(email, req.organizationId);
+
+    // Check for existing pending invitation
+    const existingInvitation = await Invitation.findOne({
+      email,
+      organization: req.organizationId,
+      status: 'pending'
+    });
+
+    if (existingInvitation) {
+      return res.status(400).json({ error: 'An invitation is already pending for this email' });
     }
 
-    // Generate invite token
-    const inviteToken = crypto.randomBytes(32).toString('hex');
-    console.log('--- INVITE MEMBER: Attempting to find organization with ID:', req.organizationId, '---');
+    // Find organization
     const organization = await Organization.findById(req.organizationId);
     if (!organization) {
-      console.error('--- INVITE MEMBER: Organization not found for ID:', req.organizationId, '---');
-      return res.status(404).json({ error: 'Organization not found. Cannot send invite.' });
+      return res.status(404).json({ error: 'Organization not found' });
     }
-    console.log('--- INVITE MEMBER: Organization found:', organization.name, 'ID:', organization._id, '---');
+
+    // Generate invite token and create invitation
+    const inviteToken = crypto.randomBytes(32).toString('hex');
+    const invitation = new Invitation({
+      token: inviteToken,
+      email,
+      organization: req.organizationId,
+      role,
+      createdBy: req.user._id
+    });
+
+    await invitation.save();
 
     // Create invite link
     const inviteLink = `${config.frontendUrl}/join/${inviteToken}`;
@@ -168,19 +198,20 @@ export const verifyInvite = async (req, res) => {
   const { inviteToken } = req.params;
   
   try {
-    // Here you would typically:
-    // 1. Find the invitation in your database using the token
-    // 2. Check if it's expired
-    // 3. Return the organization and role information
-    
-    // For now, we'll use a simple in-memory approach since you're storing invites in memory
-    // You should implement proper database storage for invitations in production
-    
-    // Mock response for now - replace with actual DB lookup
+    const invitation = await Invitation.findOne({ 
+      token: inviteToken,
+      status: 'pending',
+      expiresAt: { $gt: new Date() }
+    }).populate('organization', 'name');
+
+    if (!invitation) {
+      return res.status(400).json({ error: 'Invalid or expired invitation' });
+    }
+
     res.json({
-      email: req.query.email, // The email address from the invitation
-      organizationName: "Your Organization", // Get this from your DB
-      role: "member" // The role they were invited as
+      email: invitation.email,
+      organizationName: invitation.organization.name,
+      role: invitation.role
     });
   } catch (error) {
     console.error('Error in verifyInvite:', error);
@@ -193,15 +224,46 @@ export const acceptInvite = async (req, res) => {
   const { inviteToken } = req.params;
   
   try {
-    // Here you would typically:
-    // 1. Verify the token again
-    // 2. Add the user to the organization with the specified role
-    // 3. Mark the invitation as accepted
-    // 4. Remove or expire the invitation token
-    
-    // For now, we'll just return a success response
-    // You should implement the actual organization membership logic
-    res.json({ message: 'Invitation accepted successfully' });
+    // Find and validate invitation
+    const invitation = await Invitation.findOne({ 
+      token: inviteToken,
+      status: 'pending',
+      expiresAt: { $gt: new Date() }
+    }).populate('organization');
+
+    if (!invitation) {
+      return res.status(400).json({ error: 'Invalid or expired invitation' });
+    }
+
+    // Get the authenticated user
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // If user is already in an organization, they can't join another
+    if (user.organization) {
+      return res.status(400).json({ 
+        error: 'You are already a member of an organization. Please leave your current organization before joining another.'
+      });
+    }
+
+    // Update user's organization and role
+    user.organization = invitation.organization._id;
+    user.role = invitation.role;
+    await user.save();
+
+    // Mark invitation as accepted
+    invitation.status = 'accepted';
+    await invitation.save();
+
+    res.json({ 
+      message: 'Invitation accepted successfully',
+      organization: {
+        id: invitation.organization._id,
+        name: invitation.organization.name
+      }
+    });
   } catch (error) {
     console.error('Error in acceptInvite:', error);
     res.status(400).json({ error: 'Failed to accept invitation' });
