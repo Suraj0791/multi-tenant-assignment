@@ -1,32 +1,32 @@
-import axios from 'axios';
+import axios from "axios";
 
 // Temporarily hardcode the API URL for debugging
-const API_URL = 'https://multi-tenant-assignment.onrender.com/api';
-console.log('Using hardcoded API_URL:', API_URL);
+const API_URL = "https://multi-tenant-assignment.onrender.com/api";
+console.log("Using hardcoded API_URL:", API_URL);
 
 const axiosInstance = axios.create({
   baseURL: API_URL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
-  withCredentials: true
+  withCredentials: true,
 });
 
 // Request interceptor for API calls
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
-    console.log('Request details:', {
+
+    console.log("Request details:", {
       baseURL: config.baseURL,
       url: config.url,
       fullUrl: config.baseURL + config.url,
-      method: config.method
+      method: config.method,
     });
-    
+
     return config;
   },
   (error) => {
@@ -47,8 +47,8 @@ axiosInstance.interceptors.response.use(
 
       // Here you could implement token refresh logic if needed
       // For now, we'll just clear the token and redirect to login
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      localStorage.removeItem("token");
+      window.location.href = "/login";
     }
 
     return Promise.reject(error);

@@ -1,51 +1,195 @@
-import express from 'express';
+import express from "express";
+import { auth } from "../middleware/auth.js";
 import {
-  getOrganization,
-  updateOrganization,
-  getMembers,
-  inviteMember,
-  updateMemberRole,
-  removeMember,
-  verifyInvite,
-  acceptInvite,
-  getCurrentOrganization,
-  getOrganizationSettings
-} from '../controllers/organizationController.js';
-import { auth, authorize } from '../middleware/auth.js';
+  ensureOrganizationAccess,
+  ensureAdminAccess,
+  ensureManagerAccess,
+  ensureOrganizationData,
+} from "../middleware/organizationAuth.js";
+import Organization from "../models/Organization.js";
+import User from "../models/User.js";
+import Invitation from "../models/Invitation.js";
+import { generateInviteToken } from "../utils/invitation.js";
 
 const router = express.Router();
 
-// Verify invitation token (public endpoint)
-router.get('/invites/verify/:inviteToken', verifyInvite);
-
-// Protected routes below
+// All routes require authentication
 router.use(auth);
 
 // Get organization details
-router.get('/', getOrganization);
+router.get("/", ensureOrganizationAccess, async (req, res) => {
+  try {
+    const organization = await Organization.findById(
+      req.user.organization
+    ).select("-__v");
 
-// Update organization
-router.patch('/', authorize('admin'), updateOrganization);
+    res.json({ organization });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
-// Get organization settings
-router.get('/settings', getOrganizationSettings);
+// Update organization settings (admin only)
+router.put(
+  "/settings",
+  ensureAdminAccess,
+  ensureOrganizationAccess,
+  async (req, res) => {
+    try {
+      const organization = await Organization.findById(req.user.organization);
 
-// Get current organization
-router.get('/current', auth, getCurrentOrganization);
+      if (req.body.settings) {
+        organization.settings = {
+          ...organization.settings,
+          ...req.body.settings,
+        };
+      }
 
-// Get all members
-router.get('/members', getMembers);
+      if (req.body.name) organization.name = req.body.name;
+      if (req.body.description) organization.description = req.body.description;
+      if (req.body.website) organization.website = req.body.website;
 
-// Invite new member
-router.post('/members/invite', authorize('admin', 'manager'), inviteMember);
+      await organization.save();
+      res.json({ organization });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
 
-// Update member role
-router.patch('/members/:userId/role', authorize('admin'), updateMemberRole);
+// Get organization members
+router.get("/members", ensureOrganizationAccess, async (req, res) => {
+  try {
+    const members = await User.find({ organization: req.user.organization })
+      .select("-password")
+      .sort({ role: 1, firstName: 1 });
 
-// Remove member
-router.delete('/members/:userId', authorize('admin'), removeMember);
+    res.json({ members });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
-// Accept invitation (requires authentication)
-router.post('/invites/accept/:inviteToken', acceptInvite);
+// Update member role (admin only)
+router.put("/members/:userId/role", ensureAdminAccess, async (req, res) => {
+  try {
+    const { role } = req.body;
+    if (!["admin", "manager", "member"].includes(role)) {
+      return res.status(400).json({ error: "Invalid role" });
+    }
+
+    const member = await User.findOne({
+      _id: req.params.userId,
+      organization: req.user.organization,
+    });
+
+    if (!member) {
+      return res.status(404).json({ error: "Member not found" });
+    }
+
+    member.role = role;
+    await member.save();
+
+    res.json({ member });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Remove member from organization (admin only)
+router.delete("/members/:userId", ensureAdminAccess, async (req, res) => {
+  try {
+    const member = await User.findOne({
+      _id: req.params.userId,
+      organization: req.user.organization,
+    });
+
+    if (!member) {
+      return res.status(404).json({ error: "Member not found" });
+    }
+
+    member.organization = null;
+    member.role = "member";
+    await member.save();
+
+    res.json({ message: "Member removed successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create invitation (admin and manager only)
+router.post("/invites", ensureManagerAccess, async (req, res) => {
+  try {
+    const { email, role } = req.body;
+
+    // Validate role
+    if (!["member", "manager"].includes(role)) {
+      return res.status(400).json({ error: "Invalid role" });
+    }
+
+    // Check if user already exists in organization
+    const existingUser = await User.findOne({
+      email,
+      organization: req.user.organization,
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: "User is already a member" });
+    }
+
+    // Create invitation
+    const invitation = new Invitation({
+      email,
+      role,
+      organization: req.user.organization,
+      createdBy: req.user._id,
+      token: generateInviteToken(),
+    });
+
+    await invitation.save();
+
+    // TODO: Send invitation email
+
+    res.status(201).json({ invitation });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Get pending invitations (admin and manager only)
+router.get("/invites", ensureManagerAccess, async (req, res) => {
+  try {
+    const invitations = await Invitation.find({
+      organization: req.user.organization,
+      status: "pending",
+    }).populate("createdBy", "firstName lastName email");
+
+    res.json({ invitations });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Cancel invitation (admin and manager only)
+router.delete("/invites/:inviteId", ensureManagerAccess, async (req, res) => {
+  try {
+    const invitation = await Invitation.findOne({
+      _id: req.params.inviteId,
+      organization: req.user.organization,
+    });
+
+    if (!invitation) {
+      return res.status(404).json({ error: "Invitation not found" });
+    }
+
+    invitation.status = "expired";
+    await invitation.save();
+
+    res.json({ message: "Invitation cancelled successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 export default router;

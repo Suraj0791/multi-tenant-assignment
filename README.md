@@ -129,6 +129,9 @@ npm test
 
 ## Deployment to Render
 
+Render will handle backend deployments automatically
+
+
 1.  Sign up for a Render account at [https://render.com](https://render.com).
 2.  Connect your GitHub repository to Render.
 3.  Render automatically builds and deploys your application.
