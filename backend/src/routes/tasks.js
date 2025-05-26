@@ -4,6 +4,7 @@ import {
   getTasks,
   getTask,
   updateTask,
+  updateTaskStatus,
   deleteTask
 } from '../controllers/taskController.js';
 import { auth } from '../middleware/auth.js';
@@ -156,6 +157,9 @@ router.post('/', hasPermission('manager'), createTask);
 
 // Get single task
 router.get('/:id', hasPermission('member'), getTask);
+
+// Update task status
+router.patch('/:id/status', hasPermission('member'), canModifyTask, updateTaskStatus);
 
 // Update task
 router.patch('/:id', hasPermission('member'), canModifyTask, updateTask);

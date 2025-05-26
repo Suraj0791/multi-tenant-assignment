@@ -7,6 +7,14 @@ import {
   sendStatusUpdateNotification
 } from '../utils/email.js';
 
+// Valid status transitions
+const STATUS_TRANSITIONS = {
+  todo: ['in_progress'],
+  in_progress: ['completed', 'todo'],
+  completed: ['in_progress'],
+  expired: ['in_progress']
+};
+
 // Create new task
 export const createTask = async (req, res) => {
   try {
@@ -168,11 +176,89 @@ export const getTask = async (req, res) => {
   }
 };
 
+// Update task status
+export const updateTaskStatus = async (req, res) => {
+  try {
+    const { status, comment } = req.body;
+
+    // Validate status
+    if (!['todo', 'in_progress', 'completed'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const task = await Task.findOne({
+      _id: req.params.id,
+      organization: req.organizationId
+    }).populate('assignedTo');
+
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Check if user is assigned to this task
+    if (!task.isAssignedToUser(req.user._id) && req.user.role === 'member') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Check if status transition is valid
+    if (!STATUS_TRANSITIONS[task.status]?.includes(status)) {
+      return res.status(400).json({
+        error: `Cannot transition from ${task.status} to ${status}`
+      });
+    }
+
+    // Set user context for status history
+    task.setUserContext(req.user);
+
+    // Update status
+    task.status = status;
+    if (status === 'completed') {
+      task.completedAt = new Date();
+      task.completedBy = req.user._id;
+    }
+
+    // Add status history entry
+    task.statusHistory.push({
+      status,
+      changedBy: req.user._id,
+      changedAt: new Date(),
+      comment: comment || `Status changed to ${status}`
+    });
+
+    await task.save();
+
+    // Notify other assignees about the status change
+    const otherAssignees = task.assignedTo.filter(
+      assignee => assignee._id.toString() !== req.user._id.toString()
+    );
+
+    const updatedBy = `${req.user.firstName} ${req.user.lastName}`;
+
+    for (const assignee of otherAssignees) {
+      await sendStatusUpdateNotification(
+        assignee.email,
+        {
+          taskTitle: task.title,
+          dueDate: task.dueDate,
+          newStatus: status
+        },
+        updatedBy,
+        comment
+      );
+    }
+
+    res.json(task);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 // Update task
 export const updateTask = async (req, res) => {
   try {
     const updates = Object.keys(req.body);
-    const allowedUpdates = ['title', 'description', 'assignedTo', 'status', 'category', 'priority', 'dueDate'];
+    const allowedUpdates = ['title', 'description', 'assignedTo', 'category', 'priority', 'dueDate'];
+    // Status updates should use the dedicated updateTaskStatus endpoint
     const isValidOperation = updates.every(update => allowedUpdates.includes(update));
 
     if (!isValidOperation) {
