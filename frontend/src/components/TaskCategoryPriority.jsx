@@ -1,6 +1,6 @@
 import React from 'react';
 
-const TaskCategoryPriority = ({ formData, handleChange }) => {
+const TaskCategoryPriority = ({ formData, handleChange, categories }) => {
   return (
     <>
       <div>
@@ -10,15 +10,20 @@ const TaskCategoryPriority = ({ formData, handleChange }) => {
         >
           Category
         </label>
-        <input
-          type="text"
+        <select
           name="category"
           id="category"
           required
           className="input mt-1"
           value={formData.category}
           onChange={handleChange}
-        />
+        >
+          {categories.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div>

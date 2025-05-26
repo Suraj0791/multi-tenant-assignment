@@ -161,6 +161,19 @@ export const inviteMember = async (req, res) => {
   }
 };
 
+// Get organization settings
+export const getOrganizationSettings = async (req, res) => {
+  try {
+    const organization = await Organization.findById(req.organizationId);
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+    res.json({ settings: organization.settings });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 // Update member role
 // Get current organization details
 export const getCurrentOrganization = async (req, res) => {

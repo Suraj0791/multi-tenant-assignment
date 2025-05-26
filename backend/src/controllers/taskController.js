@@ -155,12 +155,15 @@ export const getTasks = async (req, res) => {
 // Get single task
 export const getTask = async (req, res) => {
   try {
+    console.log("Searching for task with ID:", req.params.id);
     const task = await Task.findOne({
       _id: req.params.id,
       organization: req.organizationId
     })
     .populate('assignedTo', 'email firstName lastName')
     .populate('createdBy', 'email firstName lastName');
+
+    console.log("Task findOne result:", task);
 
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });

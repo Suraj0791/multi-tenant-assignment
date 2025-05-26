@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Temporarily hardcode the API URL for debugging
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'https://multi-tenant-assignment.onrender.com/api';
 console.log('Using hardcoded API_URL:', API_URL);
 
 const axiosInstance = axios.create({

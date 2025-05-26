@@ -8,7 +8,8 @@ import {
   removeMember,
   verifyInvite,
   acceptInvite,
-  getCurrentOrganization
+  getCurrentOrganization,
+  getOrganizationSettings
 } from '../controllers/organizationController.js';
 import { auth, authorize } from '../middleware/auth.js';
 
@@ -25,6 +26,9 @@ router.get('/', getOrganization);
 
 // Update organization
 router.patch('/', authorize('admin'), updateOrganization);
+
+// Get organization settings
+router.get('/settings', getOrganizationSettings);
 
 // Get current organization
 router.get('/current', auth, getCurrentOrganization);

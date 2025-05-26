@@ -4,8 +4,15 @@ import axiosInstance from "../utils/axios";
 import Select from "react-select";
 import TaskCategoryPriority from "../components/TaskCategoryPriority";
 
-const TaskForm = ({ onSubmit, initialData = null, onCancel }) => {
-    const [formData, setFormData] = useState({
+// Reusable TaskForm Component
+const TaskForm = ({
+  onSubmit,
+  initialData = null,
+  onCancel,
+  users,
+  categories,
+}) => {
+  const [formData, setFormData] = useState({
     title: "",
     description: "",
     dueDate: "",
@@ -15,28 +22,7 @@ const TaskForm = ({ onSubmit, initialData = null, onCancel }) => {
     ...initialData,
   });
 
-  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await axiosInstance.get("/organizations/members");
-        console.log("Users API response:", response); // Log response for debugging
-        if (response.data && Array.isArray(response.data)) {
-          setUsers(response.data);
-        } else {
-          console.error("Unexpected users data format:", response.data);
-          setUsers([]);
-        }
-      } catch (error) {
-        console.error("Error fetching users:", error);
-        setUsers([]);
-      }
-    };
-
-    fetchUsers();
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -59,17 +45,18 @@ const TaskForm = ({ onSubmit, initialData = null, onCancel }) => {
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+    const { name, value, type, options } = e.target;
+    let newValue = value;
 
-  const handleAssignedToChange = (selectedOptions) => {
+    if (type === "select-multiple") {
+      newValue = Array.from(options)
+        .filter((option) => option.selected)
+        .map((option) => option.value);
+    }
+
     setFormData((prev) => ({
       ...prev,
-      assignedTo: selectedOptions ? selectedOptions.map((option) => option.value) : [],
+      [name]: newValue,
     }));
   };
 
@@ -145,12 +132,25 @@ const TaskForm = ({ onSubmit, initialData = null, onCancel }) => {
           name="assignedTo"
           options={userOptions}
           className="mt-1"
-          value={formData.assignedTo}
-          onChange={handleAssignedToChange}
+          value={userOptions.filter((option) =>
+            formData.assignedTo.includes(option.value)
+          )}
+          onChange={(selectedOptions) => {
+            setFormData((prev) => ({
+              ...prev,
+              assignedTo: selectedOptions
+                ? selectedOptions.map((option) => option.value)
+                : [],
+            }));
+          }}
         />
       </div>
 
-      <TaskCategoryPriority formData={formData} handleChange={handleChange} />
+      <TaskCategoryPriority
+        formData={formData}
+        handleChange={handleChange}
+        categories={categories}
+      />
 
       <div className="flex justify-end space-x-3">
         {onCancel && (
@@ -166,36 +166,63 @@ const TaskForm = ({ onSubmit, initialData = null, onCancel }) => {
   );
 };
 
+// Main Tasks Component
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [sortBy, setSortBy] = useState("dueDate");
   const [sortOrder, setSortOrder] = useState("asc");
+  const [categories, setCategories] = useState([]);
+
   const { user } = useSelector((state) => state.auth);
 
   const fetchTasks = async () => {
     try {
       const response = await axiosInstance.get("/tasks");
-      // Ensure tasks is always an array, even if response.data is null/undefined
-      setTasks(Array.isArray(response.data) ? response.data : []);
+      if (Array.isArray(response.data?.tasks)) {
+        setTasks(response.data.tasks);
+      } else {
+        console.warn("Tasks data is not an array:", response.data);
+        setTasks([]);
+      }
     } catch (error) {
       console.error("Error fetching tasks:", error);
-      // Set empty array on error too
       setTasks([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const res = await axiosInstance.get("/organizations/members");
+      setUsers(res.data || []);
+    } catch (error) {
+      console.error("Error fetching organization members:", error);
+    } finally {
+      setLoading(false); // ✅ Ensures "Loading..." is removed even on error
+    }
+  };
+
   useEffect(() => {
-    fetchTasks();
+    fetchUsers();
+    fetchTasks(); // if this exists
+    const fetchCategories = async () => {
+      try {
+        const response = await axiosInstance.get("/organizations/settings");
+        setCategories(response.data.settings.taskCategories || []);
+      } catch (error) {
+        console.error("Error fetching organization settings:", error);
+      }
+    };
+    fetchCategories();
   }, []);
 
- const handleCreateTask = async (formData) => {
-    console.log("Creating task with data:", formData);
+  const handleCreateTask = async (formData) => {
     try {
       await axiosInstance.post("/tasks", formData);
       setShowForm(false);
@@ -206,11 +233,17 @@ export default function Tasks() {
   };
 
  const handleUpdateTask = async (formData) => {
-    console.log("Updating task with data:", formData);
     try {
-      await axiosInstance.put(`/tasks/${editingTask._id}`, formData);
-      setEditingTask(null);
-      fetchTasks();
+      const { title, description, dueDate, assignedTo, category, priority } = formData;
+      const updatedFormData = { title, description, dueDate, assignedTo, category, priority };
+      console.log("Updating task with ID:", editingTask._id);
+      const response = await axiosInstance.put(`/tasks/${editingTask._id}`, updatedFormData);
+      if (response.status === 200) {
+        setEditingTask(null);
+        fetchTasks();
+      } else {
+        console.error("Error updating task:", response);
+      }
     } catch (error) {
       console.error("Error updating task:", error);
     }
@@ -220,8 +253,12 @@ export default function Tasks() {
     if (!window.confirm("Are you sure you want to delete this task?")) return;
 
     try {
-      await axiosInstance.delete(`/tasks/${taskId}`);
-      fetchTasks();
+      const response = await axiosInstance.delete(`/tasks/${taskId}`);
+      if (response.status === 200) {
+        fetchTasks();
+      } else {
+        console.error("Error deleting task:", response);
+      }
     } catch (error) {
       console.error("Error deleting task:", error);
     }
@@ -239,191 +276,108 @@ export default function Tasks() {
   };
 
   if (loading) {
-    return (
-      <div className="animate-pulse">
-        <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-24 bg-gray-200 rounded-lg"></div>
-          ))}
-        </div>
-      </div>
-    );
+    return <div className="text-gray-700">Loading...</div>;
   }
 
   return (
-    <div>
-      <div className="sm:flex sm:items-center">
-        <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-gray-900">Tasks</h1>
-          <p className="mt-2 text-sm text-gray-700">
-            A list of all tasks in your organization
+    <div className="p-4">
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Tasks</h1>
+          <p className="text-sm text-gray-600">
+            A list of all tasks in your organization.
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none space-x-4 flex items-center">
-          <div className="flex items-center space-x-2">
-            <label htmlFor="filterStatus" className="text-sm text-gray-700">
-              Status:
-            </label>
-            <select
-              id="filterStatus"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="rounded-md border-gray-300 text-sm"
-            >
-              <option value="all">All</option>
-              <option value="todo">Todo</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-            </select>
-          </div>
-          <div className="flex items-center space-x-2">
-            <label htmlFor="sortBy" className="text-sm text-gray-700">
-              Sort by:
-            </label>
-            <select
-              id="sortBy"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="rounded-md border-gray-300 text-sm"
-            >
-              <option value="dueDate">Due Date</option>
-              <option value="title">Title</option>
-              <option value="status">Status</option>
-            </select>
-            <button
-              onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-              className="p-1 rounded hover:bg-gray-100"
-            >
-              {sortOrder === "asc" ? "↑" : "↓"}
-            </button>
-          </div>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => setShowForm(true)}
-          >
-            Add task
-          </button>
-        </div>
+        <button onClick={() => setShowForm(true)} className="btn-primary">
+          Add Task
+        </button>
       </div>
 
       {(showForm || editingTask) && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity">
-          <div className="fixed inset-0 z-10 overflow-y-auto">
-            <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-              <div className="relative transform overflow-hidden rounded-lg bg-white px-4 pt-5 pb-4 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-                <div>
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
-                    {editingTask ? "Edit Task" : "Create New Task"}
-                  </h3>
-                  <TaskForm
-                    onSubmit={editingTask ? handleUpdateTask : handleCreateTask}
-                    initialData={editingTask}
-                    onCancel={() => {
-                      setShowForm(false);
-                      setEditingTask(null);
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="bg-white p-6 shadow-md rounded-md mb-4">
+          <h2 className="text-lg font-bold mb-4">
+            {editingTask ? "Edit Task" : "Create New Task"}
+          </h2>
+          <TaskForm
+            onSubmit={editingTask ? handleUpdateTask : handleCreateTask}
+            initialData={editingTask}
+            onCancel={() => {
+              setShowForm(false);
+              setEditingTask(null);
+            }}
+            users={users}
+            categories={categories}
+          />
         </div>
       )}
 
-      <div className="mt-8 flex flex-col">
-        <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Title
-                    </th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Assigned To
-                    </th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Due Date
-                    </th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Status
-                    </th>
-                    <th className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {tasks
-                    .filter((task) =>
-                      filterStatus === "all"
-                        ? true
-                        : task.status === filterStatus
-                    )
-                    .sort((a, b) => {
-                      if (sortBy === "dueDate") {
-                        return sortOrder === "asc"
-                          ? new Date(a.dueDate) - new Date(b.dueDate)
-                          : new Date(b.dueDate) - new Date(a.dueDate);
-                      }
-                      if (sortBy === "title") {
-                        return sortOrder === "asc"
-                          ? a.title.localeCompare(b.title)
-                          : b.title.localeCompare(a.title);
-                      }
-                      return sortOrder === "asc"
-                        ? a.status.localeCompare(b.status)
-                        : b.status.localeCompare(a.status);
+      <div className="overflow-x-auto mt-4">
+        <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-4 py-2 text-left">Title</th>
+              <th className="px-4 py-2 text-left">Assigned To</th>
+              <th className="px-4 py-2 text-left">Due Date</th>
+              <th className="px-4 py-2 text-left">Status</th>
+              <th className="px-4 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-100">
+            {tasks.map((task) => (
+              <tr key={task._id}>
+                <td className="px-4 py-2">{task.title}</td>
+                <td className="px-4 py-2">
+                  {task.assignedTo
+                    ?.map((id) => {
+                      const assignedUser = users.find((u) => u._id === id);
+                      return assignedUser
+                        ? `${assignedUser.firstName} ${assignedUser.lastName}`
+                        : "Unknown";
                     })
-                    .map((task) => (
-                      <tr key={task._id}>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
-                          {task.title}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                          {task.assignedTo?.firstName}{" "}
-                          {task.assignedTo?.lastName}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                          {new Date(task.dueDate).toLocaleDateString()}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm">
-                          <select
-                            value={task.status}
-                            onChange={(e) =>
-                              handleStatusChange(task._id, e.target.value)
-                            }
-                            className="rounded-md border-gray-300 text-sm"
-                          >
-                            <option value="todo">Todo</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="completed">Completed</option>
-                          </select>
-                        </td>
-                        <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                          <button
-                            onClick={() => setEditingTask(task)}
-                            className="text-primary-600 hover:text-primary-900 mr-4"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTask(task._id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+                    .join(", ")}
+                </td>
+                <td className="px-4 py-2">{task.dueDate?.split("T")[0]}</td>
+                <td className="px-4 py-2">
+                  <select
+                    value={task.status}
+                    onChange={(e) =>
+                      handleStatusChange(task._id, e.target.value)
+                    }
+                    className="border rounded px-2 py-1"
+                  >
+                    <option value="todo">Todo</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </td>
+                <td className="px-4 py-2 space-x-2">
+                  <button
+                    onClick={() => {
+                      setEditingTask(task);
+                      setShowForm(true);
+                    }}
+                    className="text-blue-600 hover:underline"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTask(task._id)}
+                    className="text-red-600 hover:underline"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {tasks.length === 0 && (
+              <tr>
+                <td colSpan="5" className="text-center py-4 text-gray-500">
+                  No tasks available.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
