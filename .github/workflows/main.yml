@@ -1,3 +1,13 @@
+name: Deploy Frontend to Netlify
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
 jobs:
   deploy-frontend-netlify:
     runs-on: ubuntu-latest
