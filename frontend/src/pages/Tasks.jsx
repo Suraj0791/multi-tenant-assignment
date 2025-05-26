@@ -9,8 +9,8 @@ const TaskForm = ({
   onSubmit,
   initialData = null,
   onCancel,
-  users,
-  categories,
+  users = [],
+  categories = [],
 }) => {
   const [formData, setFormData] = useState({
     title: "",
@@ -23,9 +23,23 @@ const TaskForm = ({
   });
 
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrors({});
+
+    // Validate required fields
+    const newErrors = {};
+    if (!formData.title) newErrors.title = "Title is required";
+    if (!formData.category) newErrors.category = "Category is required";
+    if (!formData.dueDate) newErrors.dueDate = "Due date is required";
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
     setLoading(true);
     try {
       await onSubmit(formData);
@@ -58,12 +72,22 @@ const TaskForm = ({
       ...prev,
       [name]: newValue,
     }));
+
+    // Clear error when field is modified
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: undefined,
+      }));
+    }
   };
 
-  const userOptions = users.map((user) => ({
-    value: user._id,
-    label: `${user.firstName} ${user.lastName}`,
-  }));
+  const userOptions = Array.isArray(users)
+    ? users.map((user) => ({
+        value: user._id,
+        label: `${user.firstName} ${user.lastName} (${user.role})`,
+      }))
+    : [];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -79,10 +103,13 @@ const TaskForm = ({
           name="title"
           id="title"
           required
-          className="input mt-1"
+          className={`input mt-1 ${errors.title ? "border-red-500" : ""}`}
           value={formData.title}
           onChange={handleChange}
         />
+        {errors.title && (
+          <p className="mt-1 text-sm text-red-600">{errors.title}</p>
+        )}
       </div>
 
       <div>
@@ -150,6 +177,7 @@ const TaskForm = ({
         formData={formData}
         handleChange={handleChange}
         categories={categories}
+        error={errors.category}
       />
 
       <div className="flex justify-end space-x-3">
@@ -220,35 +248,91 @@ export default function Tasks() {
   const fetchUsers = async () => {
     try {
       const res = await axiosInstance.get("/organizations/members");
-      setUsers(res.data || []);
+      if (res.data?.members) {
+        setUsers(res.data.members);
+      } else {
+        console.warn("No members data received:", res.data);
+        setUsers([]);
+      }
     } catch (error) {
       console.error("Error fetching organization members:", error);
-    } finally {
-      setLoading(false); // ✅ Ensures "Loading..." is removed even on error
+      setUsers([]);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await axiosInstance.get("/organizations/settings");
+      if (response.data?.settings?.categories) {
+        setCategories(response.data.settings.categories);
+      } else {
+        // Set default categories if none are found
+        setCategories([
+          "Development",
+          "Design",
+          "Marketing",
+          "Sales",
+          "Support",
+          "Other",
+        ]);
+      }
+    } catch (error) {
+      console.error("Error fetching organization settings:", error);
+      // Set default categories on error
+      setCategories([
+        "Development",
+        "Design",
+        "Marketing",
+        "Sales",
+        "Support",
+        "Other",
+      ]);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
-    fetchTasks(); // if this exists
-    const fetchCategories = async () => {
+    const initializeData = async () => {
+      setLoading(true);
       try {
-        const response = await axiosInstance.get("/organizations/settings");
-        setCategories(response.data.settings.taskCategories || []);
+        await Promise.all([fetchUsers(), fetchTasks(), fetchCategories()]);
       } catch (error) {
-        console.error("Error fetching organization settings:", error);
+        console.error("Error initializing data:", error);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchCategories();
+
+    initializeData();
   }, []);
 
   const handleCreateTask = async (formData) => {
     try {
-      await axiosInstance.post("/tasks", formData);
-      setShowForm(false);
-      fetchTasks();
+      // Format the task data
+      const taskData = {
+        title: formData.title,
+        description: formData.description || "",
+        dueDate: new Date(formData.dueDate).toISOString(),
+        assignedTo: formData.assignedTo || [],
+        category: formData.category,
+        priority: formData.priority,
+        status: "todo", // Set initial status
+      };
+
+      console.log("Creating task with data:", taskData); // Debug log
+
+      const response = await axiosInstance.post("/tasks", taskData);
+      if (response.data?.task) {
+        setShowForm(false);
+        fetchTasks();
+      } else {
+        throw new Error("Invalid response format");
+      }
     } catch (error) {
       console.error("Error creating task:", error);
+      alert(
+        error.response?.data?.error ||
+          "Failed to create task. Please check all required fields."
+      );
     }
   };
 

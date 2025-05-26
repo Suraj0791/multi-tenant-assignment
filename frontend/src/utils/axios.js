@@ -1,8 +1,8 @@
 import axios from "axios";
 
-// Temporarily hardcode the API URL for debugging
-const API_URL = "https://multi-tenant-assignment.onrender.com/api";
-console.log("Using hardcoded API_URL:", API_URL);
+// Use environment variable for API URL
+const API_URL = import.meta.env.VITE_API_URL;
+console.log("Using API_URL from environment:", API_URL);
 
 const axiosInstance = axios.create({
   baseURL: API_URL,

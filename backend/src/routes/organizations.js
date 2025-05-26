@@ -29,6 +29,45 @@ router.get("/", ensureOrganizationAccess, async (req, res) => {
   }
 });
 
+// Get organization settings
+router.get("/settings", ensureOrganizationAccess, async (req, res) => {
+  try {
+    const organization = await Organization.findById(
+      req.user.organization
+    ).select("settings name description website");
+
+    if (!organization) {
+      return res.status(404).json({ error: "Organization not found" });
+    }
+
+    // Ensure settings object exists
+    if (!organization.settings) {
+      organization.settings = {
+        categories: [
+          "Development",
+          "Design",
+          "Marketing",
+          "Sales",
+          "Support",
+          "Other",
+        ],
+        priorities: ["low", "medium", "high"],
+      };
+      await organization.save();
+    }
+
+    res.json({
+      settings: organization.settings,
+      name: organization.name,
+      description: organization.description,
+      website: organization.website,
+    });
+  } catch (error) {
+    console.error("Error fetching organization settings:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Update organization settings (admin only)
 router.put(
   "/settings",

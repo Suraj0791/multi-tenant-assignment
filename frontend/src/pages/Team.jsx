@@ -55,10 +55,10 @@ export default function Team() {
     try {
       const [membersRes, invitationsRes] = await Promise.all([
         axiosInstance.get("/organizations/members"),
-        axiosInstance.get("/organizations/invitations"),
+        axiosInstance.get("/organizations/invites"),
       ]);
-      setMembers(membersRes.data);
-      setInvitations(invitationsRes.data);
+      setMembers(membersRes.data.members);
+      setInvitations(invitationsRes.data.invitations);
     } catch (error) {
       console.error("Error fetching team data:", error);
     } finally {
@@ -71,7 +71,7 @@ export default function Team() {
     setError("");
 
     try {
-      const response = await axiosInstance.post("/organizations/invitations", {
+      const response = await axiosInstance.post("/organizations/invites", {
         email: inviteEmail,
         role: inviteRole,
       });
@@ -90,13 +90,13 @@ export default function Team() {
       setInviteEmail("");
       setInviteRole("member");
     } catch (error) {
-      setError(error.response?.data?.message || "Failed to send invitation");
+      setError(error.response?.data?.error || "Failed to send invitation");
     }
   };
 
   const handleCancelInvitation = async (invitationId) => {
     try {
-      await axiosInstance.delete(`/organizations/invitations/${invitationId}`);
+      await axiosInstance.delete(`/organizations/invites/${invitationId}`);
       await fetchTeamData();
     } catch (error) {
       console.error("Error canceling invitation:", error);

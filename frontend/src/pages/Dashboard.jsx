@@ -72,6 +72,7 @@ export default function Dashboard() {
   });
   const [recentTasks, setRecentTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -81,10 +82,19 @@ export default function Dashboard() {
           axiosInstance.get("/tasks/recent"),
         ]);
 
-        setStats(statsRes.data);
-        setRecentTasks(tasksRes.data);
+        setStats({
+          totalTasks: statsRes.data?.totalTasks || 0,
+          completedTasks: statsRes.data?.completedTasks || 0,
+          pendingTasks: statsRes.data?.pendingTasks || 0,
+          overdueTasks: statsRes.data?.overdueTasks || 0,
+          teamMembers: statsRes.data?.teamMembers || 0,
+          categoryStats: statsRes.data?.categoryStats || [],
+          priorityStats: statsRes.data?.priorityStats || [],
+        });
+        setRecentTasks(tasksRes.data?.tasks || []);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
+        setError("Failed to load dashboard data");
       } finally {
         setLoading(false);
       }
@@ -106,11 +116,25 @@ export default function Dashboard() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-red-600 text-lg">{error}</div>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 text-indigo-600 hover:text-indigo-500"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
-          Welcome back, {user?.firstName}! 👋
+          Welcome back, {user?.firstName || "User"}! 👋
         </h1>
         <p className="mt-2 text-sm text-gray-600">
           Here's what's happening in your organization today
@@ -156,30 +180,36 @@ export default function Dashboard() {
           <h3 className="text-lg font-medium text-gray-900 mb-4">
             Tasks by Category
           </h3>
-          <div className="space-y-4">
-            {stats.categoryStats.map((category) => (
-              <div key={category._id} className="flex items-center">
-                <div className="flex-1">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-700">
-                      {category._id}
-                    </span>
-                    <span className="text-sm font-medium text-gray-700">
-                      {category.count}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-indigo-600 h-2 rounded-full"
-                      style={{
-                        width: `${(category.count / stats.totalTasks) * 100}%`,
-                      }}
-                    ></div>
+          {stats.categoryStats && stats.categoryStats.length > 0 ? (
+            <div className="space-y-4">
+              {stats.categoryStats.map((category) => (
+                <div key={category._id} className="flex items-center">
+                  <div className="flex-1">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-700">
+                        {category._id || "Uncategorized"}
+                      </span>
+                      <span className="text-sm font-medium text-gray-700">
+                        {category.count}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-indigo-600 h-2 rounded-full"
+                        style={{
+                          width: `${
+                            (category.count / stats.totalTasks) * 100
+                          }%`,
+                        }}
+                      ></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm">No tasks by category yet</p>
+          )}
         </div>
 
         {/* Priority Distribution */}
@@ -187,90 +217,93 @@ export default function Dashboard() {
           <h3 className="text-lg font-medium text-gray-900 mb-4">
             Tasks by Priority
           </h3>
-          <div className="space-y-4">
-            {stats.priorityStats.map((priority) => (
-              <div key={priority._id} className="flex items-center">
-                <div className="flex-1">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-700 capitalize">
-                      {priority._id}
-                    </span>
-                    <span className="text-sm font-medium text-gray-700">
-                      {priority.count}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full ${
-                        priority._id === "high"
-                          ? "bg-red-500"
-                          : priority._id === "medium"
-                          ? "bg-yellow-500"
-                          : "bg-green-500"
-                      }`}
-                      style={{
-                        width: `${(priority.count / stats.totalTasks) * 100}%`,
-                      }}
-                    ></div>
+          {stats.priorityStats && stats.priorityStats.length > 0 ? (
+            <div className="space-y-4">
+              {stats.priorityStats.map((priority) => (
+                <div key={priority._id} className="flex items-center">
+                  <div className="flex-1">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-700">
+                        {priority._id || "No Priority"}
+                      </span>
+                      <span className="text-sm font-medium text-gray-700">
+                        {priority.count}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-indigo-600 h-2 rounded-full"
+                        style={{
+                          width: `${
+                            (priority.count / stats.totalTasks) * 100
+                          }%`,
+                        }}
+                      ></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm">No tasks by priority yet</p>
+          )}
         </div>
       </div>
 
       {/* Recent Tasks */}
-      <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Recent Tasks</h3>
-        </div>
-        <div className="divide-y divide-gray-200">
-          {recentTasks.map((task) => (
-            <div
-              key={task._id}
-              className="px-6 py-4 hover:bg-gray-50 transition-colors duration-150"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <TaskStatusBadge status={task.status} />
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-900">
-                      {task.title}
-                    </h4>
-                    <p className="text-sm text-gray-500">
-                      Assigned to: {task.assignedTo?.firstName}{" "}
-                      {task.assignedTo?.lastName}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-500">
-                    Due {new Date(task.dueDate).toLocaleDateString()}
-                  </span>
-                  <span
-                    className={`text-sm font-medium ${
-                      task.priority === "high"
-                        ? "text-red-600"
-                        : task.priority === "medium"
-                        ? "text-yellow-600"
-                        : "text-green-600"
-                    }`}
-                  >
-                    {task.priority.charAt(0).toUpperCase() +
-                      task.priority.slice(1)}{" "}
-                    Priority
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-          {recentTasks.length === 0 && (
-            <div className="px-6 py-4 text-center text-gray-500">
-              No recent tasks found
-            </div>
-          )}
-        </div>
+      <div className="bg-white shadow-lg rounded-lg p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Tasks</h3>
+        {recentTasks && recentTasks.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Task
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Assigned To
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Due Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {recentTasks.map((task) => (
+                  <tr key={task._id}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {task.title}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {task.description}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {task.assignedTo
+                          ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}`
+                          : "Unassigned"}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <TaskStatusBadge status={task.status} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(task.dueDate).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-gray-500 text-sm">No recent tasks found</p>
+        )}
       </div>
     </div>
   );

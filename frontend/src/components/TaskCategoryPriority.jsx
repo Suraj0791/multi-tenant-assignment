@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 const TaskCategoryPriority = ({ formData, handleChange, categories }) => {
   return (
@@ -15,9 +15,10 @@ const TaskCategoryPriority = ({ formData, handleChange, categories }) => {
           id="category"
           required
           className="input mt-1"
-          value={formData.category}
+          value={formData.category || ""}
           onChange={handleChange}
         >
+          <option value="">Select a category</option>
           {categories.map((category) => (
             <option key={category} value={category}>
               {category}
@@ -37,7 +38,7 @@ const TaskCategoryPriority = ({ formData, handleChange, categories }) => {
           name="priority"
           id="priority"
           className="input mt-1"
-          value={formData.priority}
+          value={formData.priority || "medium"}
           onChange={handleChange}
         >
           <option value="low">Low</option>
