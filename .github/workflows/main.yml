@@ -1,8 +1,15 @@
+name: Deploy Frontend to Netlify
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
   deploy-frontend-netlify:
-    needs: deploy-backend
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v3
       
