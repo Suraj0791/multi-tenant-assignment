@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import { register } from '../../store/slices/authSlice';
-import axiosInstance from '../../utils/axiosInstance';
+import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { register } from "../../store/slices/authSlice";
+import axiosInstance from "../../utils/axios";
 
 const JoinOrganization = () => {
   const { inviteToken } = useParams();
@@ -13,22 +13,26 @@ const JoinOrganization = () => {
   const [loading, setLoading] = useState(true);
   const [inviteData, setInviteData] = useState(null);
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
   });
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useState("");
 
   // Verify the invite token
   useEffect(() => {
     const verifyToken = async () => {
       try {
-        const response = await axiosInstance.get(`/organizations/invites/verify/${inviteToken}`);
+        const response = await axiosInstance.get(
+          `/organizations/invites/verify/${inviteToken}`
+        );
         setInviteData(response.data);
-        setFormData(prev => ({ ...prev, email: response.data.email }));
+        setFormData((prev) => ({ ...prev, email: response.data.email }));
       } catch (error) {
-        setFormError(error.response?.data?.error || 'Invalid or expired invitation link');
+        setFormError(
+          error.response?.data?.error || "Invalid or expired invitation link"
+        );
       } finally {
         setLoading(false);
       }
@@ -42,10 +46,14 @@ const JoinOrganization = () => {
     const acceptInvite = async () => {
       if (isAuthenticated && inviteData) {
         try {
-          await axiosInstance.post(`/organizations/invites/accept/${inviteToken}`);
-          navigate('/dashboard');
+          await axiosInstance.post(
+            `/organizations/invites/accept/${inviteToken}`
+          );
+          navigate("/dashboard");
         } catch (error) {
-          setFormError(error.response?.data?.error || 'Failed to accept invitation');
+          setFormError(
+            error.response?.data?.error || "Failed to accept invitation"
+          );
         }
       }
     };
@@ -55,20 +63,20 @@ const JoinOrganization = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setFormError('');
+    setFormError("");
 
     if (formData.password !== formData.confirmPassword) {
-      setFormError('Passwords do not match');
+      setFormError("Passwords do not match");
       return;
     }
 
     try {
       // Register the user
       await dispatch(register(formData)).unwrap();
-      
+
       // After successful registration, the second useEffect will handle accepting the invite
     } catch (error) {
-      setFormError(error.message || 'Registration failed');
+      setFormError(error.message || "Registration failed");
     }
   };
 
