@@ -9,20 +9,20 @@ A full-stack MERN application implementing a multi-tenant task management system
 1.  **User Registration:** New users can register to create an account.
 2.  **Organization Creation:** Upon registration, the user can create a new organization.
 3.  **Invitation Process:** To invite users to an organization:
-    *   An admin can generate an invitation link.
-    *   Users with the same organization cannot register unless they are invited.
-    *   The invitation is sent via email using Resend.
-    *   Due to the limitations of the Resend free tier plan, emails can only be sent to verified accounts.
-    *   To access the invite link, check the console logs for the email content.
+    - An admin can generate an invitation link.
+    - Users with the same organization cannot register unless they are invited.
+    - The invitation is sent via email using Resend.
+    - Due to the limitations of the Resend free tier plan, emails can only be sent to verified accounts.
+    - To access the invite link, check the console logs for the email content.
 4.  **Tasks and Roles:**
-    *   Tasks can be created, assigned, and managed within the organization.
-    *   Role-based access control (RBAC) is implemented to manage permissions.
-    *   Available roles: Admin, Manager, Member.
-
+    - Tasks can be created, assigned, and managed within the organization.
+    - Role-based access control (RBAC) is implemented to manage permissions.
+    - Available roles: Admin, Manager, Member.
 
 ### Core Features
 
 1. **Multi-Tenant User Management**
+
    - Organization-based data isolation
    - Role-based authentication (Admin, Manager, Member)
    - User registration with organization creation/joining
@@ -30,6 +30,7 @@ A full-stack MERN application implementing a multi-tenant task management system
    - JWT-based authentication with RBAC
 
 2. **Task Management**
+
    - CRUD operations for tasks
    - Task assignment system
    - Categories and priorities
@@ -78,6 +79,7 @@ A full-stack MERN application implementing a multi-tenant task management system
 Or run locally:
 
 1. Backend:
+
    ```bash
    cd backend
    npm install
@@ -94,6 +96,7 @@ Or run locally:
 ## Environment Variables
 
 ### Backend
+
 ```
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/task-manager
@@ -106,6 +109,7 @@ FRONTEND_URL=
 ```
 
 ### Frontend
+
 ```
 VITE_API_URL=
 ```
@@ -117,6 +121,7 @@ Detailed API documentation can be found in the [backend/docs](./backend/docs) di
 ## Testing
 
 Run tests using:
+
 ```bash
 # Backend tests
 cd backend
@@ -131,23 +136,22 @@ npm test
 
 Render will handle backend deployments automatically
 
-
 1.  Sign up for a Render account at [https://render.com](https://render.com).
 2.  Connect your GitHub repository to Render.
 3.  Render automatically builds and deploys your application.
 
-   Live link: [https://multi-tenant-assignment.onrender.com/api](https://multi-tenant-assignment.onrender.com/api)
+Live link: [https://multi-tenant-assignment.onrender.com/api](https://multi-tenant-assignment.onrender.com/api)
 
 ## Deployment to Netlify
 
 1.  Sign up for a Netlify account at [https://www.netlify.com](https://www.netlify.com).
 2.  Connect your GitHub repository to Netlify.
 3.  Configure the build settings:
-    *   Build command: `npm run build`
-    *   Publish directory: `dist` (or the directory where your built frontend files are located)
+    - Build command: `npm run build`
+    - Publish directory: `dist` (or the directory where your built frontend files are located)
 4.  Netlify automatically builds and deploys your application.
 
-   Live link: [https://beamish-sprite-716ffb.netlify.app/](https://beamish-sprite-716ffb.netlify.app/)
+Live link: [https://beamish-sprite-716ffb.netlify.app/](https://beamish-sprite-716ffb.netlify.app/)
 
 ## CI/CD Pipeline with GitHub Actions
 
@@ -155,12 +159,40 @@ The project uses GitHub Actions for continuous integration and continuous deploy
 
 The following environment variables are used in the GitHub Actions workflow:
 
-*   `NETLIFY_SITE_ID`: The ID of your Netlify site.
-*   `NETLIFY_AUTH_TOKEN`: Your Netlify authentication token.
-*   `VITE_API_URL`: The API URL for the frontend application.
+- `NETLIFY_SITE_ID`: The ID of your Netlify site.
+- `NETLIFY_AUTH_TOKEN`: Your Netlify authentication token.
+- `VITE_API_URL`: The API URL for the frontend application.
 
 These environment variables need to be configured in your GitHub repository settings (Settings -> Secrets -> Actions).
 
 ## License
 
 MIT
+
+## Email Service Limitation
+
+The application uses Resend's free tier for sending emails, which has the following limitation:
+
+- Emails can only be sent to the account that Resend was created with
+
+### Development Workaround
+
+During development, when inviting new members:
+
+1. The invite link will be logged to the console
+2. You can find the invite link in the following format:
+   ```
+   === Invitation Link ===
+   Email: [invitee's email]
+   Role: [assigned role]
+   Link: [invite link]
+   =====================
+   ```
+3. Use this link to test the invitation flow
+
+### Production Considerations
+
+For production deployment:
+
+1. Upgrade to a paid Resend plan, or
+2. Switch to a different email service provider that supports sending to any email address

@@ -149,9 +149,25 @@ router.post("/invites", ensureManagerAccess, async (req, res) => {
 
     await invitation.save();
 
-    // TODO: Send invitation email
+    // Generate invite link
+    const inviteLink = `${process.env.FRONTEND_URL}/join/${invitation.token}`;
 
-    res.status(201).json({ invitation });
+    // Log invite link for development
+    console.log("\n=== Invitation Link ===");
+    console.log(`Email: ${email}`);
+    console.log(`Role: ${role}`);
+    console.log(`Link: ${inviteLink}`);
+    console.log("=====================\n");
+
+    // TODO: Send invitation email
+    // Note: Currently using Resend's free tier which only allows sending to the account it was created with
+    // For development, please use the console log above to get the invite link
+
+    res.status(201).json({
+      invitation,
+      inviteLink,
+      note: "Due to email service limitations, please use the console log to get the invite link",
+    });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
