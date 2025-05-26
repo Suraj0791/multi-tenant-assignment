@@ -14,7 +14,7 @@ jobs:
         image: mongo:latest
         ports:
           - 27017:27017
-    
+
     steps:
       - uses: actions/checkout@v3
       
@@ -51,6 +51,23 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      
+      - name: Deploy to Railway
+        working-directory: backend
+        run: railway up
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  deploy-frontend:
+    needs: deploy-backend
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
@@ -76,3 +93,5 @@ jobs:
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+
