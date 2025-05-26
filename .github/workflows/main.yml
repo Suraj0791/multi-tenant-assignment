@@ -43,25 +43,8 @@ jobs:
           MONGODB_URI: mongodb://localhost:27017/test
           JWT_SECRET: test_secret
 
-  deploy-backend:
-    needs: test
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-      
-      - name: Deploy to Railway
-        working-directory: backend
-        run: railway up
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-
   deploy-frontend:
-    needs: deploy-backend
+    needs: test
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     
