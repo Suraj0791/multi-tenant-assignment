@@ -15,10 +15,24 @@ const taskSchema = new mongoose.Schema({
     ref: 'Organization',
     required: true
   },
-  assignedTo: {
+  assignedTo: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  },
+  }],
+  assignmentHistory: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    assignedAt: {
+      type: Date,
+      default: Date.now
+    },
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }
+  }],
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -31,7 +45,6 @@ const taskSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['bug', 'feature', 'improvement'],
     required: true
   },
   priority: {
@@ -46,6 +59,37 @@ const taskSchema = new mongoose.Schema({
   completedAt: {
     type: Date
   },
+  completedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  statusHistory: [{
+    status: {
+      type: String,
+      enum: ['todo', 'in_progress', 'completed', 'expired']
+    },
+    changedAt: {
+      type: Date,
+      default: Date.now
+    },
+    changedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    comment: String
+  }],
+  attachments: [{
+    name: String,
+    url: String,
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   createdAt: {
     type: Date,
     default: Date.now
@@ -56,17 +100,58 @@ const taskSchema = new mongoose.Schema({
   }
 });
 
-// Update timestamp on save
+// Update timestamp and handle status changes on save
 taskSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
+
+  // If status is being modified
+  if (this.isModified('status')) {
+    // Add to status history if there's a user context
+    if (this._user) {
+      this.statusHistory.push({
+        status: this.status,
+        changedBy: this._user._id,
+        changedAt: new Date()
+      });
+
+      // Set completedBy and completedAt if task is completed
+      if (this.status === 'completed') {
+        this.completedBy = this._user._id;
+        this.completedAt = new Date();
+      }
+    }
+  }
+
   next();
 });
 
-// Index for task expiry check
-taskSchema.index({ dueDate: 1, status: 1 });
+// Method to set user context for status updates
+taskSchema.methods.setUserContext = function(user) {
+  this._user = user;
+  return this;
+};
 
-// Index for organization-based queries
+// Method to check if a user is assigned to this task
+taskSchema.methods.isAssignedToUser = function(userId) {
+  return this.assignedTo.some(id => id.toString() === userId.toString());
+};
+
+// Method to check if a user can modify this task
+taskSchema.methods.canBeModifiedByUser = function(user) {
+  return user.role === 'admin' || 
+         user.role === 'manager' || 
+         this.createdBy.toString() === user._id.toString() || 
+         this.isAssignedToUser(user._id);
+};
+
+// Indexes for efficient queries
 taskSchema.index({ organization: 1, status: 1 });
+taskSchema.index({ assignedTo: 1 });
+taskSchema.index({ dueDate: 1, status: 1 });
+taskSchema.index({ category: 1 });
+taskSchema.index({ priority: 1 });
+taskSchema.index({ 'statusHistory.changedAt': 1 });
+taskSchema.index({ createdAt: 1 });
 
 const Task = mongoose.model('Task', taskSchema);
 
