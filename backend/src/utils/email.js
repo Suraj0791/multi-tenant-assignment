@@ -24,21 +24,88 @@ export const sendInvitationEmail = async (email, organizationName, inviteLink) =
   }
 };
 
-export const sendTaskNotification = async (email, taskTitle, dueDate) => {
+const getEmailTemplate = (type, data) => {
+  const templates = {
+    taskAssignment: `
+      <h1>New Task Assignment</h1>
+      <p>You have been assigned a new task:</p>
+      <h2>${data.taskTitle}</h2>
+      <p><strong>Description:</strong> ${data.description || 'No description provided'}</p>
+      <p><strong>Due Date:</strong> ${new Date(data.dueDate).toLocaleDateString()}</p>
+      <p><strong>Priority:</strong> ${data.priority}</p>
+      <p><strong>Category:</strong> ${data.category}</p>
+      <p>Please start working on this task at your earliest convenience.</p>
+    `,
+    taskReminder: `
+      <h1>Task Reminder</h1>
+      <p>Your task is due soon:</p>
+      <h2>${data.taskTitle}</h2>
+      <p><strong>Due Date:</strong> ${new Date(data.dueDate).toLocaleDateString()}</p>
+      <p><strong>Current Status:</strong> ${data.status}</p>
+      <p>Please make sure to complete this task before the deadline.</p>
+    `,
+    taskExpiry: `
+      <h1>Task Expired</h1>
+      <p>The following task has passed its due date:</p>
+      <h2>${data.taskTitle}</h2>
+      <p><strong>Due Date:</strong> ${new Date(data.dueDate).toLocaleDateString()}</p>
+      <p><strong>Current Status:</strong> ${data.status}</p>
+      <p>Please update the task status or contact your manager for assistance.</p>
+    `,
+    statusUpdate: `
+      <h1>Task Status Update</h1>
+      <p>A task you're involved with has been updated:</p>
+      <h2>${data.taskTitle}</h2>
+      <p><strong>New Status:</strong> ${data.newStatus}</p>
+      <p><strong>Updated By:</strong> ${data.updatedBy}</p>
+      ${data.comment ? `<p><strong>Comment:</strong> ${data.comment}</p>` : ''}
+      <p><strong>Due Date:</strong> ${new Date(data.dueDate).toLocaleDateString()}</p>
+    `
+  };
+
+  return templates[type];
+};
+
+export const sendTaskNotification = async (email, type, data) => {
   try {
+    const subjects = {
+      taskAssignment: `New Task Assignment: ${data.taskTitle}`,
+      taskReminder: `Task Reminder: ${data.taskTitle}`,
+      taskExpiry: `Task Expired: ${data.taskTitle}`,
+      statusUpdate: `Task Status Update: ${data.taskTitle}`
+    };
+
     await resend.emails.send({
       from: 'Multi-Tenant Task Manager <notifications@resend.dev>',
       to: email,
-      subject: `Task Reminder: ${taskTitle}`,
-      html: `
-        <h1>Task Reminder</h1>
-        <p>Your task "${taskTitle}" is due on ${new Date(dueDate).toLocaleDateString()}.</p>
-        <p>Please complete it before the deadline.</p>
-      `,
+      subject: subjects[type],
+      html: getEmailTemplate(type, data)
     });
+
     return true;
   } catch (error) {
     console.error('Email sending failed:', error);
     return false;
   }
+};
+
+// Shorthand functions for specific notifications
+export const sendTaskAssignmentNotification = (email, task) => {
+  return sendTaskNotification(email, 'taskAssignment', task);
+};
+
+export const sendTaskReminderNotification = (email, task) => {
+  return sendTaskNotification(email, 'taskReminder', task);
+};
+
+export const sendTaskExpiryNotification = (email, task) => {
+  return sendTaskNotification(email, 'taskExpiry', task);
+};
+
+export const sendStatusUpdateNotification = (email, task, updatedBy, comment) => {
+  return sendTaskNotification(email, 'statusUpdate', {
+    ...task,
+    updatedBy,
+    comment
+  });
 };

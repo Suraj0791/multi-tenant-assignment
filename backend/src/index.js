@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import cron from 'node-cron';
-import { checkTaskExpiry } from './utils/taskExpiry.js';
+import { checkTaskExpiry, checkTaskReminders } from './utils/taskExpiry.js';
 import { config } from './config/index.js';
 
 // Import routes
@@ -60,6 +60,12 @@ mongoose.connect(config.mongodbUri || 'mongodb://localhost:27017/task-manager', 
   cron.schedule('0 * * * *', async () => {
     console.log('Running task expiry check...');
     await checkTaskExpiry();
+  });
+
+  // Schedule task reminder check (runs every hour)
+  cron.schedule('30 * * * *', async () => {
+    console.log('Running task reminder check...');
+    await checkTaskReminders();
   });
 })
 .catch((err) => {
