@@ -5,7 +5,9 @@ import {
   getMembers,
   inviteMember,
   updateMemberRole,
-  removeMember
+  removeMember,
+  verifyInvite,
+  acceptInvite
 } from '../controllers/organizationController.js';
 import { auth, authorize } from '../middleware/auth.js';
 
@@ -31,5 +33,11 @@ router.patch('/members/:userId/role', authorize('admin'), updateMemberRole);
 
 // Remove member
 router.delete('/members/:userId', authorize('admin'), removeMember);
+
+// Verify invitation token (public route)
+router.get('/invites/verify/:inviteToken', verifyInvite);
+
+// Accept invitation (requires authentication)
+router.post('/invites/accept/:inviteToken', auth, acceptInvite);
 
 export default router;

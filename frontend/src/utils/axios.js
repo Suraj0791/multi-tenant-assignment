@@ -1,21 +1,32 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Temporarily hardcode the API URL for debugging
+const API_URL = 'http://localhost:5000/api';
+console.log('Using hardcoded API_URL:', API_URL);
 
 const axiosInstance = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true
 });
 
 // Request interceptor for API calls
 axiosInstance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-    if (token) {
+    if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    console.log('Request details:', {
+      baseURL: config.baseURL,
+      url: config.url,
+      fullUrl: config.baseURL + config.url,
+      method: config.method
+    });
+    
     return config;
   },
   (error) => {

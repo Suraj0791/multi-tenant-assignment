@@ -94,6 +94,14 @@ export default function Team() {
   const [showInviteForm, setShowInviteForm] = useState(false);
   const { user } = useSelector((state) => state.auth);
 
+  if (!user) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500">Please log in to view team members.</p>
+      </div>
+    );
+  }
+
   const fetchMembers = async () => {
     try {
       const response = await axiosInstance.get('/organizations/members');
@@ -111,7 +119,7 @@ export default function Team() {
 
   const handleInviteMember = async (formData) => {
     try {
-      await axiosInstance.post('/organizations/invite', formData);
+      await axiosInstance.post('/organizations/members/invite', formData);
       setShowInviteForm(false);
       fetchMembers();
     } catch (error) {
@@ -228,7 +236,7 @@ export default function Team() {
                         {member.email}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm">
-                        {user.role === 'admin' && member._id !== user._id ? (
+                        {user?.role === 'admin' && member._id !== user._id ? (
                           <select
                             value={member.role}
                             onChange={(e) => handleUpdateRole(member._id, e.target.value)}
@@ -254,7 +262,7 @@ export default function Team() {
                         </span>
                       </td>
                       <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                        {user.role === 'admin' && member._id !== user._id && (
+                        {user?.role === 'admin' && member._id !== user._id && (
                           <button
                             onClick={() => handleRemoveMember(member._id)}
                             className="text-red-600 hover:text-red-900"

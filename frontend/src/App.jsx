@@ -9,6 +9,7 @@ import MainLayout from './components/layout/MainLayout';
 // Auth Pages
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import JoinOrganization from './pages/auth/JoinOrganization';
 
 // Protected Pages
 import Dashboard from './pages/Dashboard';
@@ -95,6 +96,18 @@ function App() {
         />
 
         {/* Catch all route */}
+        {/* Join Organization Route */}
+        <Route
+          path="/join/:inviteToken"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <JoinOrganization />
+            )
+          }
+        />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

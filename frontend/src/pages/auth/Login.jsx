@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { login } from '../../store/slices/authSlice';
+import { login, clearError } from '../../store/slices/authSlice';
 
 export default function Login() {
   const [formData, setFormData] = useState({
@@ -14,6 +14,13 @@ export default function Login() {
   const location = useLocation();
   const { loading, error } = useSelector((state) => state.auth);
 
+  useEffect(() => {
+    // Clear errors when the component unmounts
+    return () => {
+      dispatch(clearError());
+    };
+  }, [dispatch]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const result = await dispatch(login(formData));
@@ -25,6 +32,9 @@ export default function Login() {
   };
 
   const handleChange = (e) => {
+    if (error) {
+      dispatch(clearError()); // Clear error when user starts typing
+    }
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,

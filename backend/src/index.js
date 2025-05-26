@@ -1,11 +1,9 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import cron from 'node-cron';
 import { checkTaskExpiry } from './utils/taskExpiry.js';
+import { config } from './config/index.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -15,15 +13,33 @@ import organizationRoutes from './routes/organizations.js';
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:5000'],
+  credentials: true
+}));
 app.use(express.json());
+
+// Log all incoming requests (moved before API routes)
+app.use((req, res, next) => {
+  console.log(`INCOMING: ${req.method} ${req.originalUrl} - Body: ${JSON.stringify(req.body)} - Headers: ${JSON.stringify(req.headers)}`);
+  next();
+});
+
+// Test route to verify middleware
+app.get('/api/test-middleware', (req, res) => {
+  res.json({
+    message: 'Middleware is working',
+    headers: req.headers,
+    url: req.url
+  });
+});
 
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/organizations', organizationRoutes);
 
-// Error handling middleware
+// Error handling middleware (should be last)
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 
@@ -33,7 +49,7 @@ app.use((err, req, res, next) => {
 });
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/task-manager', {
+mongoose.connect(config.mongodbUri || 'mongodb://localhost:27017/task-manager', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
@@ -51,7 +67,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/task-mana
   process.exit(1);
 });
 
-// Basic route
+// Test routes
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Multi-tenant Task Management API',
@@ -60,8 +76,16 @@ app.get('/', (req, res) => {
   });
 });
 
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'API is working' });
+});
+
+app.post('/api/test', (req, res) => {
+  res.json({ message: 'POST is working', body: req.body });
+});
+
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

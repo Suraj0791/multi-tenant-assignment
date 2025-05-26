@@ -4,6 +4,11 @@ import { auth } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// Debug route
+router.get('/debug', (req, res) => {
+  res.json({ message: 'Auth routes are working' });
+});
+
 // Public routes
 router.post('/register', register);
 router.post('/login', login);

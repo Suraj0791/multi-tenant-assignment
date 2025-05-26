@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
+import { config } from '../config/index.js';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(config.resendApiKey);
 
 export const sendInvitationEmail = async (email, organizationName, inviteLink) => {
   try {
