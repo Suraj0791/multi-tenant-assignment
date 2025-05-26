@@ -1,151 +1,117 @@
-import { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
-import axiosInstance from '../utils/axios';
+import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
+import axiosInstance from "../utils/axios";
+import {
+  UserPlusIcon,
+  UserMinusIcon,
+  ShieldCheckIcon,
+  ShieldExclamationIcon,
+  EnvelopeIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 
-const InviteForm = ({ onSubmit, onCancel }) => {
-  const [formData, setFormData] = useState({
-    email: '',
-    role: 'member',
-  });
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await onSubmit(formData);
-      setFormData({
-        email: '',
-        role: 'member',
-      });
-    } catch (error) {
-      console.error('Error inviting team member:', error);
-    } finally {
-      setLoading(false);
-    }
+// Role badge component
+const RoleBadge = ({ role }) => {
+  const roleConfig = {
+    admin: { color: "bg-purple-100 text-purple-800", icon: ShieldCheckIcon },
+    manager: {
+      color: "bg-blue-100 text-blue-800",
+      icon: ShieldExclamationIcon,
+    },
+    member: { color: "bg-green-100 text-green-800", icon: null },
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  const config = roleConfig[role] || roleConfig.member;
+  const Icon = config.icon;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-          Email Address
-        </label>
-        <input
-          type="email"
-          name="email"
-          id="email"
-          required
-          className="input mt-1"
-          value={formData.email}
-          onChange={handleChange}
-        />
-      </div>
-
-      <div>
-        <label htmlFor="role" className="block text-sm font-medium text-gray-700">
-          Role
-        </label>
-        <select
-          name="role"
-          id="role"
-          required
-          className="input mt-1"
-          value={formData.role}
-          onChange={handleChange}
-        >
-          <option value="member">Member</option>
-          <option value="manager">Manager</option>
-          <option value="admin">Admin</option>
-        </select>
-      </div>
-
-      <div className="flex justify-end space-x-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="btn-secondary"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={loading}
-          className="btn-primary"
-        >
-          {loading ? 'Sending Invite...' : 'Send Invite'}
-        </button>
-      </div>
-    </form>
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}
+    >
+      {Icon && <Icon className="h-4 w-4 mr-1" />}
+      {role.charAt(0).toUpperCase() + role.slice(1)}
+    </span>
   );
 };
 
 export default function Team() {
-  const [members, setMembers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showInviteForm, setShowInviteForm] = useState(false);
   const { user } = useSelector((state) => state.auth);
+  const [members, setMembers] = useState([]);
+  const [invitations, setInvitations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
+  const [error, setError] = useState("");
 
-  if (!user) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-gray-500">Please log in to view team members.</p>
-      </div>
-    );
-  }
+  const isAdmin = user?.role === "admin";
+  const isManager = user?.role === "manager" || isAdmin;
 
-  const fetchMembers = async () => {
+  useEffect(() => {
+    fetchTeamData();
+  }, []);
+
+  const fetchTeamData = async () => {
     try {
-      const response = await axiosInstance.get('/organizations/members');
-      setMembers(response.data);
+      const [membersRes, invitationsRes] = await Promise.all([
+        axiosInstance.get("/organizations/members"),
+        axiosInstance.get("/organizations/invitations"),
+      ]);
+      setMembers(membersRes.data);
+      setInvitations(invitationsRes.data);
     } catch (error) {
-      console.error('Error fetching team members:', error);
+      console.error("Error fetching team data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchMembers();
-  }, []);
+  const handleInvite = async (e) => {
+    e.preventDefault();
+    setError("");
 
-  const handleInviteMember = async (formData) => {
     try {
-      await axiosInstance.post('/organizations/members/invite', formData);
-      setShowInviteForm(false);
-      fetchMembers();
+      await axiosInstance.post("/organizations/invitations", {
+        email: inviteEmail,
+        role: inviteRole,
+      });
+      await fetchTeamData();
+      setShowInviteModal(false);
+      setInviteEmail("");
+      setInviteRole("member");
     } catch (error) {
-      console.error('Error inviting member:', error);
+      setError(error.response?.data?.message || "Failed to send invitation");
+    }
+  };
+
+  const handleCancelInvitation = async (invitationId) => {
+    try {
+      await axiosInstance.delete(`/organizations/invitations/${invitationId}`);
+      await fetchTeamData();
+    } catch (error) {
+      console.error("Error canceling invitation:", error);
     }
   };
 
   const handleUpdateRole = async (memberId, newRole) => {
     try {
-      await axiosInstance.patch(`/organizations/members/${memberId}/role`, {
+      await axiosInstance.patch(`/organizations/members/${memberId}`, {
         role: newRole,
       });
-      fetchMembers();
+      await fetchTeamData();
     } catch (error) {
-      console.error('Error updating member role:', error);
+      console.error("Error updating role:", error);
     }
   };
 
   const handleRemoveMember = async (memberId) => {
-    if (!window.confirm('Are you sure you want to remove this team member?')) return;
+    if (!window.confirm("Are you sure you want to remove this member?")) return;
 
     try {
       await axiosInstance.delete(`/organizations/members/${memberId}`);
-      fetchMembers();
+      await fetchTeamData();
     } catch (error) {
-      console.error('Error removing team member:', error);
+      console.error("Error removing member:", error);
     }
   };
 
@@ -154,8 +120,8 @@ export default function Team() {
       <div className="animate-pulse">
         <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
         <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-16 bg-gray-200 rounded-lg"></div>
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-20 bg-gray-200 rounded-lg"></div>
           ))}
         </div>
       </div>
@@ -163,122 +129,184 @@ export default function Team() {
   }
 
   return (
-    <div>
-      <div className="sm:flex sm:items-center">
-        <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-gray-900">Team Members</h1>
-          <p className="mt-2 text-sm text-gray-700">
-            A list of all the members in your organization
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Team Management</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Manage your organization's members and invitations
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+        {isManager && (
           <button
-            type="button"
-            className="btn-primary"
-            onClick={() => setShowInviteForm(true)}
+            onClick={() => setShowInviteModal(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
-            Invite member
+            <UserPlusIcon className="h-5 w-5 mr-2" />
+            Invite Member
           </button>
-        </div>
+        )}
       </div>
 
-      {showInviteForm && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity">
-          <div className="fixed inset-0 z-10 overflow-y-auto">
-            <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-              <div className="relative transform overflow-hidden rounded-lg bg-white px-4 pt-5 pb-4 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-                <div>
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
-                    Invite Team Member
-                  </h3>
-                  <InviteForm
-                    onSubmit={handleInviteMember}
-                    onCancel={() => setShowInviteForm(false)}
-                  />
+      {/* Team Members */}
+      <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-medium text-gray-900">Team Members</h2>
+        </div>
+        <div className="divide-y divide-gray-200">
+          {members.map((member) => (
+            <div
+              key={member._id}
+              className="px-6 py-4 hover:bg-gray-50 transition-colors duration-150"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="flex-shrink-0">
+                    <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                      <span className="text-indigo-600 font-medium">
+                        {member.firstName[0]}
+                        {member.lastName[0]}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900">
+                      {member.firstName} {member.lastName}
+                    </h3>
+                    <p className="text-sm text-gray-500">{member.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <RoleBadge role={member.role} />
+                  {isAdmin && member._id !== user._id && (
+                    <div className="flex items-center space-x-2">
+                      <select
+                        value={member.role}
+                        onChange={(e) =>
+                          handleUpdateRole(member._id, e.target.value)
+                        }
+                        className="block w-32 pl-3 pr-10 py-1 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md"
+                      >
+                        <option value="member">Member</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <button
+                        onClick={() => handleRemoveMember(member._id)}
+                        className="p-1 text-red-600 hover:text-red-800 focus:outline-none"
+                      >
+                        <UserMinusIcon className="h-5 w-5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Pending Invitations */}
+      {isManager && invitations.length > 0 && (
+        <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-medium text-gray-900">
+              Pending Invitations
+            </h2>
+          </div>
+          <div className="divide-y divide-gray-200">
+            {invitations.map((invitation) => (
+              <div
+                key={invitation._id}
+                className="px-6 py-4 hover:bg-gray-50 transition-colors duration-150"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <EnvelopeIcon className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {invitation.email}
+                      </p>
+                      <RoleBadge role={invitation.role} />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleCancelInvitation(invitation._id)}
+                    className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none"
+                  >
+                    <XMarkIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      <div className="mt-8 flex flex-col">
-        <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Name
-                    </th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Email
-                    </th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Role
-                    </th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Status
-                    </th>
-                    <th className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {members.map((member) => (
-                    <tr key={member._id}>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
-                        {member.firstName} {member.lastName}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {member.email}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm">
-                        {user?.role === 'admin' && member._id !== user._id ? (
-                          <select
-                            value={member.role}
-                            onChange={(e) => handleUpdateRole(member._id, e.target.value)}
-                            className="rounded-md border-gray-300 text-sm"
-                          >
-                            <option value="member">Member</option>
-                            <option value="manager">Manager</option>
-                            <option value="admin">Admin</option>
-                          </select>
-                        ) : (
-                          <span className="capitalize">{member.role}</span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm">
-                        <span
-                          className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
-                            member.status === 'active'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}
-                        >
-                          {member.status}
-                        </span>
-                      </td>
-                      <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                        {user?.role === 'admin' && member._id !== user._id && (
-                          <button
-                            onClick={() => handleRemoveMember(member._id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {/* Invite Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Invite Team Member
+            </h3>
+            <form onSubmit={handleInvite}>
+              <div className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="email"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="role"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Role
+                  </label>
+                  <select
+                    id="role"
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value)}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  >
+                    <option value="member">Member</option>
+                    {isAdmin && <option value="manager">Manager</option>}
+                    {isAdmin && <option value="admin">Admin</option>}
+                  </select>
+                </div>
+                {error && <p className="text-sm text-red-600">{error}</p>}
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowInviteModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Send Invitation
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

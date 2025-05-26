@@ -180,6 +180,26 @@ export default function Tasks() {
 
   const { user } = useSelector((state) => state.auth);
 
+  const isAdmin = user?.role === "admin";
+  const isManager = user?.role === "manager";
+  const canManageTasks = isAdmin || isManager;
+
+  // Helper function to check if user can edit a task
+  const canEditTask = (task) => {
+    if (canManageTasks) return true;
+    return task.assignedTo.some((assignee) => assignee._id === user._id);
+  };
+
+  // Helper function to check if user can edit task details
+  const canEditTaskDetails = () => {
+    return canManageTasks;
+  };
+
+  // Helper function to check if user can delete a task
+  const canDeleteTask = () => {
+    return canManageTasks;
+  };
+
   const fetchTasks = async () => {
     try {
       const response = await axiosInstance.get("/tasks");
@@ -232,46 +252,72 @@ export default function Tasks() {
     }
   };
 
- const handleUpdateTask = async (formData) => {
+  const handleUpdateTask = async (formData) => {
     try {
-      const { title, description, dueDate, assignedTo, category, priority } = formData;
-      const updatedFormData = { title, description, dueDate, assignedTo, category, priority };
-      console.log("Updating task with ID:", editingTask._id);
-      const response = await axiosInstance.put(`/tasks/${editingTask._id}`, updatedFormData);
+      if (!canEditTaskDetails()) {
+        alert("Only admins and managers can edit task details");
+        return;
+      }
+
+      const { title, description, dueDate, assignedTo, category, priority } =
+        formData;
+      const updatedFormData = {
+        title,
+        description,
+        dueDate,
+        assignedTo,
+        category,
+        priority,
+      };
+
+      const response = await axiosInstance.put(
+        `/tasks/${editingTask._id}`,
+        updatedFormData
+      );
       if (response.status === 200) {
         setEditingTask(null);
         fetchTasks();
-      } else {
-        console.error("Error updating task:", response);
       }
     } catch (error) {
       console.error("Error updating task:", error);
+      alert(error.response?.data?.error || "Failed to update task");
     }
   };
 
   const handleDeleteTask = async (taskId) => {
+    if (!canDeleteTask()) {
+      alert("Only admins and managers can delete tasks");
+      return;
+    }
+
     if (!window.confirm("Are you sure you want to delete this task?")) return;
 
     try {
-      const response = await axiosInstance.delete(`/tasks/${taskId}`);
-      if (response.status === 200) {
-        fetchTasks();
-      } else {
-        console.error("Error deleting task:", response);
-      }
+      await axiosInstance.delete(`/tasks/${taskId}`);
+      fetchTasks();
     } catch (error) {
       console.error("Error deleting task:", error);
+      alert(error.response?.data?.error || "Failed to delete task");
     }
   };
 
   const handleStatusChange = async (taskId, newStatus) => {
     try {
+      const task = tasks.find((t) => t._id === taskId);
+      if (!task) return;
+
+      if (!canEditTask(task)) {
+        alert("You don't have permission to update this task's status");
+        return;
+      }
+
       await axiosInstance.patch(`/tasks/${taskId}/status`, {
         status: newStatus,
       });
       fetchTasks();
     } catch (error) {
       console.error("Error updating task status:", error);
+      alert(error.response?.data?.error || "Failed to update task status");
     }
   };
 
@@ -280,105 +326,174 @@ export default function Tasks() {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-semibold">Tasks</h1>
-          <p className="text-sm text-gray-600">
-            A list of all tasks in your organization.
+          <h1 className="text-3xl font-bold text-gray-900">Tasks</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Manage and track your organization's tasks
           </p>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
-          Add Task
-        </button>
+        {canManageTasks && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            Create Task
+          </button>
+        )}
       </div>
 
+      {/* Task List */}
+      <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-medium text-gray-900">Task List</h2>
+            <div className="flex items-center space-x-4">
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="block w-40 pl-3 pr-10 py-2 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md"
+              >
+                <option value="all">All Status</option>
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="expired">Expired</option>
+              </select>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="block w-40 pl-3 pr-10 py-2 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md"
+              >
+                <option value="dueDate">Due Date</option>
+                <option value="priority">Priority</option>
+                <option value="status">Status</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="divide-y divide-gray-200">
+          {tasks
+            .filter(
+              (task) => filterStatus === "all" || task.status === filterStatus
+            )
+            .sort((a, b) => {
+              if (sortBy === "dueDate") {
+                return sortOrder === "asc"
+                  ? new Date(a.dueDate) - new Date(b.dueDate)
+                  : new Date(b.dueDate) - new Date(a.dueDate);
+              }
+              if (sortBy === "priority") {
+                const priorityOrder = { high: 3, medium: 2, low: 1 };
+                return sortOrder === "asc"
+                  ? priorityOrder[a.priority] - priorityOrder[b.priority]
+                  : priorityOrder[b.priority] - priorityOrder[a.priority];
+              }
+              return sortOrder === "asc"
+                ? a.status.localeCompare(b.status)
+                : b.status.localeCompare(a.status);
+            })
+            .map((task) => (
+              <div
+                key={task._id}
+                className="px-6 py-4 hover:bg-gray-50 transition-colors duration-150"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3">
+                      <select
+                        value={task.status}
+                        onChange={(e) =>
+                          handleStatusChange(task._id, e.target.value)
+                        }
+                        disabled={!canEditTask(task)}
+                        className={`block w-32 pl-3 pr-10 py-1 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md ${
+                          !canEditTask(task)
+                            ? "bg-gray-100 cursor-not-allowed"
+                            : ""
+                        }`}
+                      >
+                        <option value="todo">To Do</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="expired">Expired</option>
+                      </select>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-900">
+                          {task.title}
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          {task.description}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center space-x-4">
+                      <span className="text-sm text-gray-500">
+                        Due: {new Date(task.dueDate).toLocaleDateString()}
+                      </span>
+                      <span
+                        className={`text-sm font-medium ${
+                          task.priority === "high"
+                            ? "text-red-600"
+                            : task.priority === "medium"
+                            ? "text-yellow-600"
+                            : "text-green-600"
+                        }`}
+                      >
+                        {task.priority.charAt(0).toUpperCase() +
+                          task.priority.slice(1)}{" "}
+                        Priority
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        Category: {task.category}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {canEditTaskDetails() && (
+                      <button
+                        onClick={() => setEditingTask(task)}
+                        className="p-1 text-indigo-600 hover:text-indigo-800 focus:outline-none"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {canDeleteTask() && (
+                      <button
+                        onClick={() => handleDeleteTask(task._id)}
+                        className="p-1 text-red-600 hover:text-red-800 focus:outline-none"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+
+      {/* Task Form Modal */}
       {(showForm || editingTask) && (
-        <div className="bg-white p-6 shadow-md rounded-md mb-4">
-          <h2 className="text-lg font-bold mb-4">
-            {editingTask ? "Edit Task" : "Create New Task"}
-          </h2>
-          <TaskForm
-            onSubmit={editingTask ? handleUpdateTask : handleCreateTask}
-            initialData={editingTask}
-            onCancel={() => {
-              setShowForm(false);
-              setEditingTask(null);
-            }}
-            users={users}
-            categories={categories}
-          />
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              {editingTask ? "Edit Task" : "Create New Task"}
+            </h3>
+            <TaskForm
+              onSubmit={editingTask ? handleUpdateTask : handleCreateTask}
+              initialData={editingTask}
+              onCancel={() => {
+                setShowForm(false);
+                setEditingTask(null);
+              }}
+              users={users}
+              categories={categories}
+            />
+          </div>
         </div>
       )}
-
-      <div className="overflow-x-auto mt-4">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="px-4 py-2 text-left">Title</th>
-              <th className="px-4 py-2 text-left">Assigned To</th>
-              <th className="px-4 py-2 text-left">Due Date</th>
-              <th className="px-4 py-2 text-left">Status</th>
-              <th className="px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
-            {tasks.map((task) => (
-              <tr key={task._id}>
-                <td className="px-4 py-2">{task.title}</td>
-                <td className="px-4 py-2">
-                  {task.assignedTo
-                    ?.map((id) => {
-                      const assignedUser = users.find((u) => u._id === id);
-                      return assignedUser
-                        ? `${assignedUser.firstName} ${assignedUser.lastName}`
-                        : "Unknown";
-                    })
-                    .join(", ")}
-                </td>
-                <td className="px-4 py-2">{task.dueDate?.split("T")[0]}</td>
-                <td className="px-4 py-2">
-                  <select
-                    value={task.status}
-                    onChange={(e) =>
-                      handleStatusChange(task._id, e.target.value)
-                    }
-                    className="border rounded px-2 py-1"
-                  >
-                    <option value="todo">Todo</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                </td>
-                <td className="px-4 py-2 space-x-2">
-                  <button
-                    onClick={() => {
-                      setEditingTask(task);
-                      setShowForm(true);
-                    }}
-                    className="text-blue-600 hover:underline"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteTask(task._id)}
-                    className="text-red-600 hover:underline"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {tasks.length === 0 && (
-              <tr>
-                <td colSpan="5" className="text-center py-4 text-gray-500">
-                  No tasks available.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

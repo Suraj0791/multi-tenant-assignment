@@ -74,7 +74,7 @@ router.post("/", ensureManagerAccess, async (req, res) => {
   }
 });
 
-// Update a task (admin, manager, or assigned member)
+// Update a task (admin and manager only for details, members can only update status)
 router.put("/:id", ensureOrganizationData(Task), async (req, res) => {
   try {
     const task = req.resource;
@@ -86,11 +86,24 @@ router.put("/:id", ensureOrganizationData(Task), async (req, res) => {
         .json({ error: "You do not have permission to update this task" });
     }
 
-    // Only admin and manager can change assignments
-    if (req.body.assignedTo && !["admin", "manager"].includes(req.user.role)) {
+    // If trying to update task details (not just status), check for admin/manager role
+    const isUpdatingDetails = Object.keys(req.body).some(
+      (key) => !["status"].includes(key)
+    );
+
+    if (isUpdatingDetails && !task.canEditDetails(req.user)) {
       return res
         .status(403)
-        .json({ error: "Only admin and manager can change task assignments" });
+        .json({ error: "Only admins and managers can edit task details" });
+    }
+
+    // Only admin and manager can change assignments
+    if (req.body.assignedTo && !task.canEditDetails(req.user)) {
+      return res
+        .status(403)
+        .json({
+          error: "Only admins and managers can change task assignments",
+        });
     }
 
     Object.assign(task, req.body);
@@ -111,7 +124,9 @@ router.patch("/:id/status", ensureOrganizationData(Task), async (req, res) => {
     if (!task.canBeModifiedByUser(req.user)) {
       return res
         .status(403)
-        .json({ error: "You do not have permission to update this task" });
+        .json({
+          error: "You do not have permission to update this task's status",
+        });
     }
 
     task.status = req.body.status;
@@ -125,18 +140,21 @@ router.patch("/:id/status", ensureOrganizationData(Task), async (req, res) => {
 });
 
 // Delete a task (admin and manager only)
-router.delete(
-  "/:id",
-  ensureManagerAccess,
-  ensureOrganizationData(Task),
-  async (req, res) => {
-    try {
-      await Task.findByIdAndDelete(req.params.id);
-      res.json({ message: "Task deleted successfully" });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
+router.delete("/:id", ensureOrganizationData(Task), async (req, res) => {
+  try {
+    const task = req.resource;
+
+    if (!task.canDelete(req.user)) {
+      return res
+        .status(403)
+        .json({ error: "Only admins and managers can delete tasks" });
     }
+
+    await Task.findByIdAndDelete(req.params.id);
+    res.json({ message: "Task deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-);
+});
 
 export default router;
