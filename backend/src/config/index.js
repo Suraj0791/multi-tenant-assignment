@@ -7,6 +7,12 @@ const __dirname = dirname(__filename);
 
 dotenv.config({ path: resolve(__dirname, '../../.env') });
 
+console.log('--- CONFIG: Environment Variables ---');
+console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Not Set');
+console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Not Set');
+console.log('PORT:', process.env.PORT);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+
 export const config = {
   port: process.env.PORT || 5000,
   mongodbUri: process.env.MONGODB_URI,

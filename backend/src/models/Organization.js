@@ -4,7 +4,8 @@ const organizationSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    trim: true
+    trim: true,
+    unique: true
   },
   slug: {
     type: String,

@@ -2,41 +2,72 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Organization from '../models/Organization.js';
 import Invitation from '../models/Invitation.js';
+import { config } from '../config/index.js';
 
 // Generate JWT token
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '24h' });
+  return jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 };
 
 // Helper to create organization and admin user
 const createOrganization = async (organizationName, userData) => {
-  // Create organization with slug
-  const organizationSlug = organizationName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+  try {
+    // Check if organization exists by name
+    const existingOrg = await Organization.findOne({ 
+      name: { $regex: new RegExp(`^${organizationName}$`, 'i') } 
+    });
+    if (existingOrg) {
+      throw new Error('Organization already exists. Please ask an Admin to invite you.');
+    }
 
-  const organization = new Organization({
-    name: organizationName,
-    slug: organizationSlug
-  });
-  await organization.save();
+    // Create organization with slug
+    const organizationSlug = organizationName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
 
-  // Create admin user
-  const user = new User({
-    ...userData,
-    organization: organization._id,
-    role: 'admin' // First user is admin
-  });
-  await user.save();
+    // Check if slug exists
+    const existingSlug = await Organization.findOne({ slug: organizationSlug });
+    if (existingSlug) {
+      throw new Error('Organization with similar name already exists. Please choose a different name.');
+    }
 
-  return { user, organization };
+    const organization = new Organization({
+      name: organizationName,
+      slug: organizationSlug
+    });
+    await organization.save();
+
+    // Create admin user
+    const user = new User({
+      ...userData,
+      organization: organization._id,
+      role: 'admin' // First user is admin
+    });
+    await user.save();
+
+    return { user, organization };
+  } catch (error) {
+    if (error.code === 11000) {
+      if (error.keyPattern.name) {
+        throw new Error('Organization already exists. Please ask an Admin to invite you.');
+      } else if (error.keyPattern.slug) {
+        throw new Error('Organization with similar name already exists. Please choose a different name.');
+      }
+    }
+    throw error;
+  }
 };
 
 // Register new user (with optional organization)
 export const register = async (req, res) => {
   try {
-    const { email, password, firstName, lastName, organizationName, inviteToken } = req.body;
+    const { email, password, firstName, lastName, organizationName, inviteToken, organizationId } = req.body;
+
+    // Prevent direct organization assignment
+    if (organizationId) {
+      return res.status(400).json({ error: 'Cannot directly join an organization. Please use an invitation.' });
+    }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -76,8 +107,17 @@ export const register = async (req, res) => {
 
       organization = invitation.organization;
     } 
-    // If organizationName is provided, create new organization
+    // If organizationName is provided, check if it exists first
     else if (organizationName) {
+      // Check if organization already exists
+      const existingOrg = await Organization.findOne({ name: organizationName });
+      if (existingOrg) {
+        return res.status(400).json({ 
+          error: 'Organization already exists. Please ask an Admin to invite you.'
+        });
+      }
+
+      // Create new organization since it doesn't exist
       const result = await createOrganization(organizationName, {
         email,
         password,
@@ -87,7 +127,7 @@ export const register = async (req, res) => {
       user = result.user;
       organization = result.organization;
     } 
-    // If neither inviteToken nor organizationName, just create the user
+    // If neither inviteToken nor organizationName, just create the user without organization
     else {
       user = new User({
         email,
@@ -156,11 +196,11 @@ export const login = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        organization: {
+        organization: user.organization ? {
           id: user.organization._id,
           name: user.organization.name,
           slug: user.organization.slug
-        }
+        } : null
       }
     });
   } catch (error) {

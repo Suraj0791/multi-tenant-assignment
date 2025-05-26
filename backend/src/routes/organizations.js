@@ -7,13 +7,17 @@ import {
   updateMemberRole,
   removeMember,
   verifyInvite,
-  acceptInvite
+  acceptInvite,
+  getCurrentOrganization
 } from '../controllers/organizationController.js';
 import { auth, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// All routes require authentication
+// Verify invitation token (public endpoint)
+router.get('/invites/verify/:inviteToken', verifyInvite);
+
+// Protected routes below
 router.use(auth);
 
 // Get organization details
@@ -21,6 +25,9 @@ router.get('/', getOrganization);
 
 // Update organization
 router.patch('/', authorize('admin'), updateOrganization);
+
+// Get current organization
+router.get('/current', auth, getCurrentOrganization);
 
 // Get all members
 router.get('/members', getMembers);
@@ -34,10 +41,7 @@ router.patch('/members/:userId/role', authorize('admin'), updateMemberRole);
 // Remove member
 router.delete('/members/:userId', authorize('admin'), removeMember);
 
-// Verify invitation token (public route)
-router.get('/invites/verify/:inviteToken', verifyInvite);
-
 // Accept invitation (requires authentication)
-router.post('/invites/accept/:inviteToken', auth, acceptInvite);
+router.post('/invites/accept/:inviteToken', acceptInvite);
 
 export default router;

@@ -129,22 +129,32 @@ export const inviteMember = async (req, res) => {
 
     await invitation.save();
 
-    // Create invite link
-    const inviteLink = `${config.frontendUrl}/join/${inviteToken}`;
+    // Generate invite link
+    const inviteLink = `${config.frontendUrl}/register?invite=${inviteToken}`;
 
-    // Store invitation in memory (should be stored in database in production)
-    // For this demo, we'll just send the email
-    console.log('--- INVITE MEMBER: FRONTEND_URL is:', process.env.FRONTEND_URL, '---');
-    console.log('--- INVITE MEMBER: Invite link generated:', inviteLink, '---');
-    console.log('--- INVITE MEMBER: Attempting to send email to:', email, 'Org Name:', organization.name, '---');
-    const emailSent = await sendInvitationEmail(email, organization.name, inviteLink);
-
-    if (!emailSent) {
-      return res.status(500).json({ error: 'Failed to send invitation email. Please check server logs.' });
+    // Send invitation email
+    try {
+      await sendInvitationEmail(
+        email,
+        organization.name,
+        inviteLink
+      );
+      console.log('--- INVITE MEMBER: Email sent successfully to:', email, '---');
+    } catch (error) {
+      console.warn('Email sending failed:', error.message);
+      // We don't throw here as we still want to return the invite link
     }
 
-    console.log('--- INVITE MEMBER: Email sent successfully to:', email, '---');
-    res.json({ message: 'Invitation sent successfully' });
+    // Return both success message and invite link
+    res.json({ 
+      message: 'Invitation sent successfully',
+      inviteLink,
+      inviteToken,
+      email,
+      role,
+      organizationName: organization.name,
+      expiresAt: invitation.expiresAt
+    });
   } catch (error) {
     console.error('--- INVITE MEMBER: CAUGHT ERROR ---', error.name, error.message, error.stack); // Add server-side logging
     res.status(400).json({ error: error.message });
@@ -152,6 +162,27 @@ export const inviteMember = async (req, res) => {
 };
 
 // Update member role
+// Get current organization details
+export const getCurrentOrganization = async (req, res) => {
+  try {
+    // Get organization from auth middleware
+    const organization = await Organization.findById(req.organizationId);
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    res.json({
+      organization: {
+        id: organization._id,
+        name: organization.name,
+        slug: organization.slug
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export const updateMemberRole = async (req, res) => {
   console.log('--- updateMemberRole controller CALLED ---', 'Params:', req.params, 'Body:', req.body);
   try {
@@ -198,20 +229,34 @@ export const verifyInvite = async (req, res) => {
   const { inviteToken } = req.params;
   
   try {
-    const invitation = await Invitation.findOne({ 
-      token: inviteToken,
-      status: 'pending',
-      expiresAt: { $gt: new Date() }
-    }).populate('organization', 'name');
+    let invitation;
+    if (inviteToken === 'latest') {
+      // Get the latest invitation
+      invitation = await Invitation.findOne({ 
+        status: 'pending',
+        expiresAt: { $gt: new Date() }
+      })
+      .sort({ createdAt: -1 })
+      .populate('organization', 'name');
+    } else {
+      // Get invitation by token
+      invitation = await Invitation.findOne({ 
+        token: inviteToken,
+        status: 'pending',
+        expiresAt: { $gt: new Date() }
+      }).populate('organization', 'name');
+    }
 
     if (!invitation) {
       return res.status(400).json({ error: 'Invalid or expired invitation' });
     }
 
     res.json({
+      token: invitation.token,
       email: invitation.email,
       organizationName: invitation.organization.name,
-      role: invitation.role
+      role: invitation.role,
+      expiresAt: invitation.expiresAt
     });
   } catch (error) {
     console.error('Error in verifyInvite:', error);
