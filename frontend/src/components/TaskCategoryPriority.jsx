@@ -1,0 +1,47 @@
+import React from 'react';
+
+const TaskCategoryPriority = ({ formData, handleChange }) => {
+  return (
+    <>
+      <div>
+        <label
+          htmlFor="category"
+          className="block text-sm font-medium text-gray-700"
+        >
+          Category
+        </label>
+        <input
+          type="text"
+          name="category"
+          id="category"
+          required
+          className="input mt-1"
+          value={formData.category}
+          onChange={handleChange}
+        />
+      </div>
+
+      <div>
+        <label
+          htmlFor="priority"
+          className="block text-sm font-medium text-gray-700"
+        >
+          Priority
+        </label>
+        <select
+          name="priority"
+          id="priority"
+          className="input mt-1"
+          value={formData.priority}
+          onChange={handleChange}
+        >
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+    </>
+  );
+};
+
+export default TaskCategoryPriority;

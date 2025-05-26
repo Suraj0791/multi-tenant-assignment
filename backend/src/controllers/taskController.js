@@ -17,12 +17,14 @@ const STATUS_TRANSITIONS = {
 
 // Create new task
 export const createTask = async (req, res) => {
+  console.log("Received task creation request with body:", req.body);
   try {
     const { title, description, assignedTo, category, priority, dueDate } = req.body;
 
     // Validate category against organization settings
     const organization = await Organization.findById(req.organizationId);
     if (!organization.settings.taskCategories.includes(category)) {
+      console.log("Invalid category:", category);
       return res.status(400).json({ error: 'Invalid category for this organization' });
     }
 
